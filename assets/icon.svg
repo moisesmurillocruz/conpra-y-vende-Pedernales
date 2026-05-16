@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Compra y Vende Pedernales</title>
+  <rect width="512" height="512" rx="112" fill="#0f766e" />
+  <circle cx="390" cy="116" r="58" fill="#f59e0b" opacity="0.92" />
+  <path
+    fill="#ffffff"
+    d="M129 186c0-25 20-45 45-45h164c25 0 45 20 45 45v27h29c14 0 25 11 25 25v108c0 14-11 25-25 25H100c-14 0-25-11-25-25V238c0-14 11-25 25-25h29v-27Zm50 27h154v-27c0-3-2-5-5-5H184c-3 0-5 2-5 5v27Zm-17 69a29 29 0 1 0 0 58 29 29 0 0 0 0-58Zm158 11h-91a20 20 0 1 0 0 40h91a20 20 0 1 0 0-40Z"
+  />
+  <path
+    fill="#ecfeff"
+    d="M101 383h310c11 0 20 9 20 20s-9 20-20 20H101c-11 0-20-9-20-20s9-20 20-20Z"
+    opacity="0.9"
+  />
+</svg>
