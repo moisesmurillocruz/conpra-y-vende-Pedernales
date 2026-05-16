@@ -30,6 +30,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -202,7 +203,8 @@ button:disabled {
 .auth-section,
 .section-grid,
 .home-layout,
-.profile-layout {
+.profile-layout,
+.support-layout {
   width: min(1180px, 100%);
   margin: 32px auto 0;
 }
@@ -458,6 +460,7 @@ label {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -469,6 +472,10 @@ textarea {
   box-shadow:
     inset 8px 10px 18px rgba(0, 0, 0, 0.26),
     inset -4px -5px 12px rgba(255, 255, 255, 0.04);
+}
+
+select {
+  appearance: none;
 }
 
 textarea {
@@ -914,6 +921,80 @@ textarea {
   gap: 8px;
 }
 
+.owner-verified-note {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid rgba(100, 199, 255, 0.22);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(100, 199, 255, 0.16), rgba(255, 255, 255, 0.05)),
+    rgba(17, 28, 44, 0.42);
+}
+
+.owner-verified-note p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.support-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px;
+  align-items: start;
+}
+
+.support-card,
+.support-queue {
+  padding: 28px;
+  border-radius: 34px;
+}
+
+.support-card p,
+.support-queue p {
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.7;
+}
+
+.support-form {
+  display: grid;
+  margin-top: 20px;
+}
+
+.support-queue,
+.support-admin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.support-queue article,
+.support-admin-list article {
+  padding: 16px;
+  border: 1px solid rgba(255, 216, 144, 0.14);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.support-queue article strong,
+.support-admin-list article strong {
+  color: #ffd890;
+}
+
+.support-queue article span,
+.support-admin-list article span,
+.support-admin-list small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.auto-reply {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  color: #dffdf3;
+  background: rgba(49, 214, 158, 0.12);
+}
+
 @keyframes hover-product {
   0%,
   100% {
@@ -954,7 +1035,8 @@ textarea {
   .hero,
   .auth-section,
   .home-layout,
-  .profile-layout {
+  .profile-layout,
+  .support-layout {
     grid-template-columns: 1fr;
   }
 

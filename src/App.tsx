@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 
 type Role = 'user' | 'owner'
-type FeedTab = 'inicio' | 'perfil'
+type FeedTab = 'inicio' | 'perfil' | 'soporte'
 type Reaction = 'Me gusta' | 'Me encanta' | 'Me enoja'
 type Recommendation = 'recommended' | 'notRecommended'
 
@@ -49,15 +49,28 @@ type Listing = {
 
 type ModerationEvent = {
   id: number
-  surface: 'comentario' | 'chat'
+  surface: 'comentario' | 'chat' | 'soporte'
   text: string
   reason: string
   at: string
 }
 
+type SupportTicket = {
+  id: number
+  number: string
+  category: string
+  contact: string
+  message: string
+  autoReply: string
+  status: 'Recibido' | 'En revision' | 'Contactado'
+  createdAt: string
+}
+
 const APP_NAME = 'Compra y venta pedernales'
 const KYC_WARNING =
   'Para poder comprar, vender o comentar dentro de la aplicación, es obligatorio que verifiques tu identidad subiendo tu cédula en tu perfil.'
+const SUPPORT_AUTO_REPLY =
+  'Gracias por informar el problema. En cuanto un agente vea su mensaje se pondrá en contacto con la persona para ayudarle, especialmente si tiene problemas al verificarse.'
 
 const categories: Category[] = [
   {
@@ -281,6 +294,10 @@ function App() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [privateMessage, setPrivateMessage] = useState('')
   const [moderationEvents, setModerationEvents] = useState<ModerationEvent[]>([])
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([])
+  const [supportContact, setSupportContact] = useState('')
+  const [supportCategory, setSupportCategory] = useState('Problemas al verificarse')
+  const [supportMessage, setSupportMessage] = useState('')
   const [closedDeals, setClosedDeals] = useState<Record<string, boolean>>({})
   const [listingTitle, setListingTitle] = useState('Terreno esquinero cerca al malecon')
   const [listingPrice, setListingPrice] = useState('45000')
@@ -291,7 +308,13 @@ function App() {
 
   const verified = Boolean(kycFile)
   const isOwner = session?.role === 'owner'
-  const canOperate = verified || isOwner
+  const effectiveVerified = verified || isOwner
+  const verificationLabel = isOwner
+    ? 'Propietario verificado'
+    : effectiveVerified
+      ? 'Visto azul activo'
+      : 'KYC pendiente'
+  const canOperate = effectiveVerified
 
   const commission = useMemo(() => {
     const parsed = Number(listingPrice)
@@ -358,8 +381,13 @@ function App() {
 
     const role = await authenticate(email, loginPassword)
     setSession({ email, role })
+    setSupportContact(email)
     setActiveTab('inicio')
-    showAlert(role === 'owner' ? 'Sesion iniciada como propietario principal.' : 'Acceso inmediato activado.')
+    showAlert(
+      role === 'owner'
+        ? 'Sesion iniciada como propietario principal. Verificacion activada por rol.'
+        : 'Acceso inmediato activado.',
+    )
   }
 
   const handleKycUpload = (file: File | null) => {
@@ -456,6 +484,37 @@ function App() {
     setActiveTab('inicio')
   }
 
+  const submitSupportTicket = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const contact = (supportContact || session?.email || '').trim()
+    const message = supportMessage.trim()
+
+    if (!contact || !message) {
+      showAlert('Escribe un contacto y describe el error para crear el reporte de soporte.')
+      return
+    }
+
+    if (!interceptText(message, 'soporte')) {
+      return
+    }
+
+    const ticketNumber = `SUP-${String(supportTickets.length + 1).padStart(3, '0')}`
+    const ticket: SupportTicket = {
+      id: Date.now(),
+      number: ticketNumber,
+      category: supportCategory,
+      contact,
+      message,
+      autoReply: SUPPORT_AUTO_REPLY,
+      status: 'Recibido',
+      createdAt: new Date().toLocaleString('es-EC'),
+    }
+
+    setSupportTickets((current) => [...current, ticket])
+    setSupportMessage('')
+    showAlert(`Reporte ${ticketNumber} recibido. ${SUPPORT_AUTO_REPLY}`)
+  }
+
   return (
     <main className="app-shell" style={depthStyle}>
       <div className="ambient ambient-one" />
@@ -477,6 +536,9 @@ function App() {
           <button type="button" className={activeTab === 'perfil' ? 'is-active' : ''} onClick={() => setActiveTab('perfil')}>
             Perfil
           </button>
+          <button type="button" className={activeTab === 'soporte' ? 'is-active' : ''} onClick={() => setActiveTab('soporte')}>
+            Soporte
+          </button>
         </div>
       </nav>
 
@@ -487,6 +549,7 @@ function App() {
           <p className="hero-text">
             Registro rapido con correo y contraseña, navegacion inmediata y bloqueo profesional
             de compras, ventas y comentarios hasta subir la cedula ecuatoriana en el perfil.
+            El propietario aparece verificado automaticamente por su rol seguro.
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={() => setActiveTab('perfil')}>
@@ -498,7 +561,7 @@ function App() {
           </div>
           <div className="trust-row" aria-label="Indicadores de confianza">
             <span><strong>20%</strong> comision fija</span>
-            <span><strong>{verified ? 'Verificado' : 'KYC pendiente'}</strong> estado</span>
+            <span><strong>{verificationLabel}</strong> estado</span>
             <span><strong>{userTrustScore}%</strong> confianza</span>
           </div>
         </div>
@@ -510,7 +573,7 @@ function App() {
           <div className="phone-content">
             <p>Feed cronologico</p>
             <h2>3D + KYC</h2>
-            <span className="verified-chip">{verified ? 'Visto azul activo' : 'Sube tu cedula'}</span>
+            <span className="verified-chip">{effectiveVerified ? verificationLabel : 'Sube tu cedula'}</span>
           </div>
           <div className="reaction-stack">
             <span>Compra directa</span>
@@ -674,7 +737,7 @@ function App() {
             </aside>
           </section>
         </>
-      ) : (
+      ) : activeTab === 'perfil' ? (
         <section className="profile-layout">
           <div className="profile-card">
             <div className="cover-preview">
@@ -697,25 +760,38 @@ function App() {
                 </div>
                 <button className="secondary-button" type="button">Editar perfil</button>
               </div>
-              <div className={`verification-panel ${verified ? 'is-verified' : ''}`}>
+              <div className={`verification-panel ${effectiveVerified ? 'is-verified' : ''}`}>
                 <span className="blue-check large" />
                 <div>
-                  <strong>{verified ? 'Visto azul activo' : 'Verificacion KYC obligatoria'}</strong>
-                  <p>{verified ? 'Cedula registrada para operar.' : KYC_WARNING}</p>
+                  <strong>{verificationLabel}</strong>
+                  <p>
+                    {isOwner
+                      ? 'Tu cuenta de propietario principal aparece verificada automaticamente y no necesita subir cedula.'
+                      : verified
+                        ? 'Cedula registrada para operar.'
+                        : KYC_WARNING}
+                  </p>
                 </div>
               </div>
-              <label className="file-drop">
-                <span>{kycFile ? kycFile.name : 'Subir fotografia de cedula de Ecuador'}</span>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(event) => handleKycUpload(event.target.files?.[0] ?? null)}
-                />
-              </label>
+              {isOwner ? (
+                <div className="owner-verified-note">
+                  <strong>Verificacion del propietario</strong>
+                  <p>Rol validado por el servidor mediante variables de entorno seguras.</p>
+                </div>
+              ) : (
+                <label className="file-drop">
+                  <span>{kycFile ? kycFile.name : 'Subir fotografia de cedula de Ecuador'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(event) => handleKycUpload(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+              )}
               <div className="score-board">
                 <span><strong>{userTrustScore}%</strong> confianza publica</span>
                 <span><strong>3</strong> recomendaciones</span>
-                <span><strong>{verified ? 'Si' : 'No'}</strong> verificado</span>
+                <span><strong>{effectiveVerified ? 'Si' : 'No'}</strong> verificado</span>
               </div>
             </div>
           </div>
@@ -788,6 +864,22 @@ function App() {
                   <span>Chats revisables: 36</span>
                   <span>Lives activos: 3</span>
                   <span>Eventos filtro: {moderationEvents.length}</span>
+                  <span>Soporte: {supportTickets.length}</span>
+                </div>
+                <div className="support-admin-list">
+                  <h3>Reportes de soporte en orden</h3>
+                  {supportTickets.length === 0 ? (
+                    <p>No hay reportes de soporte pendientes.</p>
+                  ) : (
+                    supportTickets.map((ticket) => (
+                      <article key={ticket.id}>
+                        <strong>{ticket.number} · {ticket.category}</strong>
+                        <span>{ticket.status} · {ticket.createdAt}</span>
+                        <p>{ticket.message}</p>
+                        <small>Contacto: {ticket.contact}</small>
+                      </article>
+                    ))
+                  )}
                 </div>
                 <div className="moderation-log">
                   {moderationEvents.length === 0 ? (
@@ -809,6 +901,63 @@ function App() {
               </section>
             )}
           </div>
+        </section>
+      ) : (
+        <section className="support-layout">
+          <div className="support-card glass-card">
+            <p className="eyebrow">Soporte y reportes</p>
+            <h2>Informa errores de la app o problemas al verificarte.</h2>
+            <p>
+              Los reportes se agregan en orden con numero de caso para que soporte pueda atenderlos
+              correctamente. Puedes enviar un problema de verificacion aunque aun no tengas visto azul.
+            </p>
+            <form className="support-form" onSubmit={submitSupportTicket}>
+              <label>
+                Contacto
+                <input
+                  value={supportContact}
+                  onChange={(event) => setSupportContact(event.target.value)}
+                  placeholder="Correo o telefono para responderte"
+                />
+              </label>
+              <label>
+                Tipo de problema
+                <select value={supportCategory} onChange={(event) => setSupportCategory(event.target.value)}>
+                  <option>Problemas al verificarse</option>
+                  <option>Error en la app</option>
+                  <option>Problema al comprar</option>
+                  <option>Problema al vender</option>
+                  <option>Reporte de seguridad</option>
+                </select>
+              </label>
+              <label>
+                Describe el problema
+                <textarea
+                  value={supportMessage}
+                  onChange={(event) => setSupportMessage(event.target.value)}
+                  placeholder="Cuéntanos que ocurre y en qué pantalla pasa..."
+                />
+              </label>
+              <button className="primary-button" type="submit">Enviar reporte</button>
+            </form>
+          </div>
+
+          <aside className="support-queue glass-card">
+            <p className="eyebrow">Orden de atencion</p>
+            <h3>Reportes recibidos</h3>
+            {supportTickets.length === 0 ? (
+              <p>Aun no hay reportes. El primer mensaje creara el caso SUP-001.</p>
+            ) : (
+              supportTickets.map((ticket) => (
+                <article key={ticket.id}>
+                  <strong>{ticket.number}</strong>
+                  <span>{ticket.category} · {ticket.status}</span>
+                  <p>{ticket.message}</p>
+                  <div className="auto-reply">{ticket.autoReply}</div>
+                </article>
+              ))
+            )}
+          </aside>
         </section>
       )}
     </main>

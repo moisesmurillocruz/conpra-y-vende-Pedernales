@@ -9,6 +9,8 @@ operar, reputacion por transaccion y acceso oculto del propietario mediante serv
 - **Registro rapido:** el usuario entra con correo y contraseña. La navegacion inicial es inmediata.
 - **Bloqueo KYC:** comprar, vender y comentar quedan bloqueados hasta subir la foto de la cedula
   ecuatoriana desde el perfil. Al cargarla se asigna visto azul automaticamente.
+- **Propietario verificado:** el propietario principal aparece verificado automaticamente por su rol
+  seguro y no necesita subir cedula.
 - **Inicio:** feed cronologico con fotos HD, videos verticales, descripciones, etiquetas, compra
   directa, llamada, videollamada HD, mensaje privado, reacciones, comentarios y directorio comercial.
 - **Perfil:** foto de perfil, portada, datos personales, verificacion, editar perfil, publicaciones,
@@ -19,6 +21,8 @@ operar, reputacion por transaccion y acceso oculto del propietario mediante serv
   infraccion, bloquea el envio, alerta al usuario y registra el evento para auditoria.
 - **Propietario oculto:** no hay panel admin publico. El propietario inicia sesion en el mismo
   formulario y solo ve el panel de control dentro de su perfil si el servidor valida su rol.
+- **Soporte ordenado:** cualquier usuario puede reportar errores o problemas al verificarse. La app
+  crea tickets numerados en orden y responde automaticamente que un agente se pondra en contacto.
 
 ## Credenciales del propietario
 
