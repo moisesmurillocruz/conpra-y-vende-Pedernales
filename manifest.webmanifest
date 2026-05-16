@@ -1,0 +1,42 @@
+{
+  "name": "Compra y Vende Pedernales",
+  "short_name": "Pedernales",
+  "description": "Mercado local para comprar, vender y encontrar servicios en Pedernales.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "lang": "es",
+  "categories": ["shopping", "business", "local"],
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Descargar app",
+      "short_name": "Descargar",
+      "description": "Abrir instrucciones de instalacion",
+      "url": "./#descargar",
+      "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

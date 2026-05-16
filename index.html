@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta
+      name="description"
+      content="Compra y Vende Pedernales conecta ofertas locales, servicios y productos de la comunidad."
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Compra y Vende Pedernales</title>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav" aria-label="Navegacion principal">
+        <a class="brand" href="#inicio" aria-label="Ir al inicio">
+          <img src="assets/icon.svg" alt="" width="40" height="40" />
+          <span>Compra y Vende Pedernales</span>
+        </a>
+        <a class="nav__link" href="#descargar">Descargar</a>
+      </nav>
+
+      <section id="inicio" class="hero__content">
+        <p class="eyebrow">Mercado local de confianza</p>
+        <h1>Compra, vende y encuentra oportunidades en Pedernales.</h1>
+        <p class="hero__lead">
+          Publica productos, revisa ofertas cercanas y mantente conectado con
+          negocios y vecinos desde una app instalable en tu telefono.
+        </p>
+        <div class="hero__actions">
+          <a class="button button--primary" href="#descargar">Descargar app</a>
+          <a class="button button--ghost" href="#beneficios">Ver beneficios</a>
+        </div>
+      </section>
+    </header>
+
+    <main>
+      <section id="beneficios" class="section">
+        <div class="section__heading">
+          <p class="eyebrow">Lista para instalar</p>
+          <h2>Funciona como app y tambien como pagina web.</h2>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">1</span>
+            <h3>Instalable</h3>
+            <p>Agrega el acceso directo a tu pantalla de inicio con un toque.</p>
+          </article>
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">2</span>
+            <h3>Rapida</h3>
+            <p>Los archivos principales quedan guardados para abrir mas rapido.</p>
+          </article>
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">3</span>
+            <h3>Local</h3>
+            <p>Enfocada en compras, ventas y servicios de Pedernales.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="descargar" class="install-panel" aria-labelledby="install-title">
+        <div>
+          <p class="eyebrow">Descarga directa</p>
+          <h2 id="install-title">Instala la app en tu dispositivo.</h2>
+          <p>
+            Si tu navegador permite instalar esta PWA, usa el boton. Si no, abre
+            el menu del navegador y elige "Agregar a pantalla principal".
+          </p>
+        </div>
+        <div class="install-panel__actions">
+          <button id="installButton" class="button button--primary" type="button" disabled>
+            Descargar app
+          </button>
+          <p id="installStatus" class="install-status" role="status">
+            Preparando instalacion...
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Compra y Vende Pedernales. App web progresiva.</p>
+    </footer>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
