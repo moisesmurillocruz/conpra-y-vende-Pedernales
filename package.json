@@ -1,13 +1,14 @@
 {
   "name": "compra-y-venta-pedernales-ecuador",
   "version": "1.0.0",
-  "description": "Marketplace premium de alta gama para Pedernales, Ecuador.",
+  "description": "Marketplace premium de alta gama para Pedernales.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/index.mjs"
   },
   "repository": {
     "type": "git",

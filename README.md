@@ -1,31 +1,59 @@
-# Compra y venta Pedernales Ecuador
+# Compra y venta pedernales
 
-Marketplace premium de alta gama para Pedernales, Ecuador. Esta primera version es una SPA
-React/Vite con enfoque movil, interfaz 3D/neumorfica, KYC de demostracion, perfiles, catalogo,
-publicacion social, live shopping vertical, llamadas integradas y panel super admin demo.
+Marketplace premium de alta gama para Pedernales. La aplicacion es una SPA React/Vite con
+experiencia movil, interfaz 3D/neumorfica, feed social de compra/venta, KYC obligatorio para
+operar, reputacion por transaccion y acceso oculto del propietario mediante servidor.
 
-## Funcionalidades incluidas
+## Flujos principales
 
-- Diseno 3D disruptivo con profundidad, sombreado, texturas visuales y parallax por puntero/sensor.
-- Registro KYC con datos reales, carga obligatoria de foto de cedula y visto azul automatico.
-- Perfil con portada, foto de perfil, reputacion, ventas y entregas.
-- Categorias inteligentes: bienes raices, vehiculos y accesorios.
-- Motor de publicacion con fotos/videos, titulo, precio, descripcion, etiquetas y comision fija 20%.
-- Modulos sociales: compartir, comentarios y reacciones "Me gusta", "Me encanta", "Me enoja".
-- Live shopping vertical con chat superpuesto y controles de llamada/video llamada HD.
-- Acceso maestro super admin de demostracion:
-  - Usuario: `Colorin1992@gmail.com`
-  - Clave: `Mundo2026`
+- **Registro rapido:** el usuario entra con correo y contraseña. La navegacion inicial es inmediata.
+- **Bloqueo KYC:** comprar, vender y comentar quedan bloqueados hasta subir la foto de la cedula
+  ecuatoriana desde el perfil. Al cargarla se asigna visto azul automaticamente.
+- **Inicio:** feed cronologico con fotos HD, videos verticales, descripciones, etiquetas, compra
+  directa, llamada, videollamada HD, mensaje privado, reacciones, comentarios y directorio comercial.
+- **Perfil:** foto de perfil, portada, datos personales, verificacion, editar perfil, publicaciones,
+  historias, transmisiones en vivo, amigos y solicitudes.
+- **Reputacion:** cuando una compra se concreta se habilitan botones `Recomendado` y
+  `No Recomendado`; el perfil calcula el porcentaje publico de confianza.
+- **Convivencia:** comentarios y chats pasan por un filtro de palabras prohibidas. Si detecta una
+  infraccion, bloquea el envio, alerta al usuario y registra el evento para auditoria.
+- **Propietario oculto:** no hay panel admin publico. El propietario inicia sesion en el mismo
+  formulario y solo ve el panel de control dentro de su perfil si el servidor valida su rol.
 
-> Seguridad: las credenciales y el KYC son solo simulaciones de prototipo en el cliente. Para
-> produccion se requiere backend seguro, verificacion documental real, hashing de claves, MFA,
-> auditoria, cifrado de documentos y cumplimiento normativo para datos personales.
+## Credenciales del propietario
+
+No se almacenan correos ni contrasenas en texto plano dentro del codigo fuente. El servidor valida
+el rol propietario contra hashes SHA-256 en variables de entorno:
+
+```bash
+cp .env.example .env
+node -e "console.log(require('crypto').createHash('sha256').update('correo@propietario.com').digest('hex'))"
+node -e "console.log(require('crypto').createHash('sha256').update('clave-segura').digest('hex'))"
+```
+
+Configura:
+
+```bash
+OWNER_EMAIL_SHA256=<hash-del-correo-en-minusculas>
+OWNER_PASSWORD_SHA256=<hash-de-la-clave>
+```
+
+> Nota: para produccion real, reemplazar SHA-256 simple por autenticacion robusta con hash de
+> contrasenas con sal (Argon2/bcrypt), MFA, sesiones firmadas, permisos por backend, cifrado de
+> documentos KYC y auditoria persistente.
 
 ## Desarrollo
 
 ```bash
 npm install
 npm run dev
+```
+
+## Build y servidor con autenticacion integrada
+
+```bash
+npm run build
+npm start
 ```
 
 ## Validacion
