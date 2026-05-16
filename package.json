@@ -1,0 +1,39 @@
+{
+  "name": "compra-y-venta-pedernales-ecuador",
+  "version": "1.0.0",
+  "description": "Marketplace premium de alta gama para Pedernales, Ecuador.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moisesmurillocruz/conpra-y-vende-Pedernales.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "bugs": {
+    "url": "https://github.com/moisesmurillocruz/conpra-y-vende-Pedernales/issues"
+  },
+  "homepage": "https://github.com/moisesmurillocruz/conpra-y-vende-Pedernales#readme",
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.13"
+  }
+}
