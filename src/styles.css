@@ -210,6 +210,7 @@ button:disabled {
 .section-grid,
 .home-layout,
 .profile-layout,
+.settings-layout,
 .support-layout {
   width: min(1180px, 100%);
   margin: 32px auto 0;
@@ -1057,6 +1058,219 @@ textarea {
   background: rgba(49, 214, 158, 0.12);
 }
 
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.reach-policy,
+.settings-metric {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 10px 13px;
+  color: #ffe6aa;
+  background: rgba(255, 216, 144, 0.11);
+  font-weight: 900;
+}
+
+.status-section,
+.auction-section {
+  width: min(1180px, 100%);
+  margin: 32px auto 0;
+  padding: 28px;
+  border-radius: 34px;
+}
+
+.media-ads-section {
+  width: min(1180px, 100%);
+  margin: 32px auto 0;
+}
+
+.status-grid,
+.paid-ad-grid,
+.auction-grid,
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.status-card,
+.paid-ad-card,
+.auction-card,
+.settings-grid article {
+  overflow: hidden;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    12px 18px 34px rgba(0, 0, 0, 0.28),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.status-card,
+.paid-ad-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  padding: 14px;
+}
+
+.status-media,
+.paid-ad-art,
+.auction-art {
+  position: relative;
+  min-height: 150px;
+  border-radius: 22px;
+  box-shadow:
+    inset 16px 18px 40px rgba(255, 255, 255, 0.16),
+    inset -20px -24px 48px rgba(0, 0, 0, 0.36);
+}
+
+.status-media span,
+.paid-ad-art span,
+.auction-art span {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.38);
+  font-weight: 900;
+}
+
+.reach-meter {
+  height: 12px;
+  margin: 14px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.reach-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8ee8cb, #ffd890);
+}
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-actions button,
+.bid-row button,
+.toggle {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 13px;
+  color: #211306;
+  background: linear-gradient(145deg, #ffe0a0, #c47f29);
+  font-weight: 900;
+}
+
+.auction-card {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  padding: 14px;
+}
+
+.auction-body {
+  display: grid;
+  gap: 12px;
+}
+
+.auction-prices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.auction-prices span {
+  padding: 12px;
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.auction-prices strong {
+  display: block;
+  color: #ffd890;
+}
+
+.bid-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 22px;
+  align-items: start;
+}
+
+.settings-card,
+.wallet-card {
+  padding: 28px;
+  border-radius: 34px;
+}
+
+.settings-grid article {
+  padding: 18px;
+}
+
+.settings-grid p,
+.wallet-card p {
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.7;
+}
+
+.toggle {
+  color: rgba(255, 255, 255, 0.76);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.055);
+}
+
+.toggle.is-on {
+  color: #211306;
+  background: linear-gradient(145deg, #8ee8cb, #37bf91);
+}
+
+.wallet-balance {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 15px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.wallet-balance strong {
+  color: #ffd890;
+}
+
+.wallet-balance.is-available {
+  background: rgba(49, 214, 158, 0.13);
+}
+
+.owner-withdraw {
+  width: 100%;
+  margin: 4px 0 18px;
+}
+
 @keyframes hover-product {
   0%,
   100% {
@@ -1098,6 +1312,7 @@ textarea {
   .auth-section,
   .home-layout,
   .profile-layout,
+  .settings-layout,
   .support-layout {
     grid-template-columns: 1fr;
   }
@@ -1147,7 +1362,24 @@ textarea {
   .publisher-grid,
   .score-board,
   .audit-grid,
+  .status-grid,
+  .paid-ad-grid,
+  .auction-grid,
+  .settings-grid,
+  .auction-prices,
   .comment-box.inline {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading,
+  .status-actions {
+    display: grid;
+  }
+
+  .status-card,
+  .paid-ad-card,
+  .auction-card,
+  .bid-row {
     grid-template-columns: 1fr;
   }
 

@@ -13,6 +13,14 @@ operar, reputacion por transaccion y acceso oculto del propietario mediante serv
   seguro y no necesita subir cedula.
 - **Inicio:** feed cronologico con fotos HD, videos verticales, descripciones, etiquetas, compra
   directa, llamada, videollamada HD, mensaje privado, reacciones, comentarios y directorio comercial.
+- **Estados y publicidad:** los estados aparecen en inicio con alcance organico del 50%; al pagar
+  publicidad pasan al 100% y el dinero se suma a la billetera publicitaria del propietario.
+- **Subastas:** modulo ordenado por categoria con entrada de subasta, pujas superiores obligatorias,
+  historial de pujas y compra directa.
+- **Anuncios en fotos y videos:** carril de publicidad internacional ordenado por mayor presupuesto
+  para monetizar el inventario visual de la app.
+- **Configuraciones:** notificaciones, politicas de alcance, subastas, publicidad y billetera del
+  propietario para retirar ingresos recaudados.
 - **Perfil:** foto de perfil, portada, datos personales, verificacion, editar perfil, publicaciones,
   historias, transmisiones en vivo, amigos y solicitudes.
 - **Reputacion:** cuando una compra se concreta se habilitan botones `Recomendado` y
@@ -21,6 +29,8 @@ operar, reputacion por transaccion y acceso oculto del propietario mediante serv
   infraccion, bloquea el envio, alerta al usuario y registra el evento para auditoria.
 - **Propietario oculto:** no hay panel admin publico. El propietario inicia sesion en el mismo
   formulario y solo ve el panel de control dentro de su perfil si el servidor valida su rol.
+- **Retiros del propietario:** solo la cuenta propietaria verificada por servidor puede retirar el
+  dinero acumulado por publicidad pagada.
 - **Soporte ordenado:** cualquier usuario puede reportar errores o problemas al verificarse. La app
   crea tickets numerados en orden y responde automaticamente que un agente se pondra en contacto.
 

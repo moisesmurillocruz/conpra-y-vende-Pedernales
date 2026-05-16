@@ -1,9 +1,10 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 
 type Role = 'user' | 'owner'
-type FeedTab = 'inicio' | 'perfil' | 'soporte'
+type FeedTab = 'inicio' | 'perfil' | 'configuracion' | 'soporte'
 type Reaction = 'Me gusta' | 'Me encanta' | 'Me enoja'
 type Recommendation = 'recommended' | 'notRecommended'
+type AuctionCategory = 'Vehiculos' | 'Bienes Raices' | 'Accesorios'
 
 type DepthStyle = CSSProperties & {
   '--rx': string
@@ -64,6 +65,38 @@ type SupportTicket = {
   autoReply: string
   status: 'Recibido' | 'En revision' | 'Contactado'
   createdAt: string
+}
+
+type StatusPost = {
+  id: string
+  author: string
+  text: string
+  mediaType: 'Foto' | 'Video'
+  reach: 50 | 100
+  highlighted: boolean
+  visual: string
+}
+
+type Auction = {
+  id: string
+  title: string
+  category: AuctionCategory
+  entryPrice: number
+  directBuyPrice: number
+  currentBid: number
+  bids: { bidder: string; amount: number }[]
+  endsAt: string
+  visual: string
+}
+
+type PaidAd = {
+  id: string
+  brand: string
+  country: string
+  placement: 'Fotos' | 'Videos'
+  budget: number
+  status: 'Moderada' | 'Activa'
+  visual: string
 }
 
 const APP_NAME = 'Compra y venta pedernales'
@@ -167,6 +200,96 @@ const initialListings: Listing[] = [
     mediaType: 'Foto HD',
     visual: 'radial-gradient(circle at 24% 24%, #ffe1d7, #eb7658 26%, #753132 58%, #16090d)',
     createdAt: 'Hace 41 min',
+  },
+]
+
+const initialStatuses: StatusPost[] = [
+  {
+    id: 'estado-vehiculo',
+    author: 'Jean Zambrano',
+    text: 'Hoy muestro motos y accesorios con entrega inmediata.',
+    mediaType: 'Video',
+    reach: 50,
+    highlighted: false,
+    visual: 'linear-gradient(145deg, #ffdc8a, #943c22 58%, #16080a)',
+  },
+  {
+    id: 'estado-finca',
+    author: 'Mariela Vera',
+    text: 'Tour rapido de finca con vista al mar disponible para visitas.',
+    mediaType: 'Foto',
+    reach: 100,
+    highlighted: true,
+    visual: 'linear-gradient(145deg, #8cf0c8, #14634f 58%, #061b17)',
+  },
+]
+
+const initialAuctions: Auction[] = [
+  {
+    id: 'subasta-camioneta',
+    title: 'Camioneta 4x4 lista para trabajo',
+    category: 'Vehiculos',
+    entryPrice: 500,
+    directBuyPrice: 18500,
+    currentBid: 14200,
+    bids: [
+      { bidder: 'Jean Zambrano', amount: 14200 },
+      { bidder: 'Rosa Cevallos', amount: 13750 },
+    ],
+    endsAt: 'Cierra hoy 20:30',
+    visual: 'radial-gradient(circle at 34% 28%, #fff2c7, #d67b32 34%, #2d1110 72%)',
+  },
+  {
+    id: 'subasta-terreno',
+    title: 'Terreno esquinero cerca al malecon',
+    category: 'Bienes Raices',
+    entryPrice: 1000,
+    directBuyPrice: 52000,
+    currentBid: 43500,
+    bids: [{ bidder: 'Mariela Vera', amount: 43500 }],
+    endsAt: 'Cierra manana 18:00',
+    visual: 'radial-gradient(circle at 35% 25%, #d7ffe9, #3aaa7d 34%, #0d322a 72%)',
+  },
+  {
+    id: 'subasta-repuestos',
+    title: 'Lote de repuestos premium para motos',
+    category: 'Accesorios',
+    entryPrice: 80,
+    directBuyPrice: 980,
+    currentBid: 640,
+    bids: [{ bidder: 'Taller Norte', amount: 640 }],
+    endsAt: 'Cierra en 3 horas',
+    visual: 'radial-gradient(circle at 32% 24%, #ffe4d8, #e36d54 34%, #321018 72%)',
+  },
+]
+
+const initialPaidAds: PaidAd[] = [
+  {
+    id: 'ad-panama',
+    brand: 'Panama Motors Export',
+    country: 'Panama',
+    placement: 'Videos',
+    budget: 420,
+    status: 'Activa',
+    visual: 'linear-gradient(145deg, #2ec8ff, #17376f 62%, #080b19)',
+  },
+  {
+    id: 'ad-colombia',
+    brand: 'Colombia Repuestos Pro',
+    country: 'Colombia',
+    placement: 'Fotos',
+    budget: 360,
+    status: 'Moderada',
+    visual: 'linear-gradient(145deg, #ffe071, #bf5d2b 58%, #1b0b09)',
+  },
+  {
+    id: 'ad-usa',
+    brand: 'US Real Estate Leads',
+    country: 'Estados Unidos',
+    placement: 'Videos',
+    budget: 720,
+    status: 'Activa',
+    visual: 'linear-gradient(145deg, #d6ecff, #1263be 56%, #070f22)',
   },
 ]
 
@@ -298,6 +421,12 @@ function App() {
   const [supportContact, setSupportContact] = useState('')
   const [supportCategory, setSupportCategory] = useState('Problemas al verificarse')
   const [supportMessage, setSupportMessage] = useState('')
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [statusPosts, setStatusPosts] = useState(initialStatuses)
+  const [auctions, setAuctions] = useState(initialAuctions)
+  const [paidAds, setPaidAds] = useState(initialPaidAds)
+  const [withdrawnAdRevenue, setWithdrawnAdRevenue] = useState(0)
+  const [bidDrafts, setBidDrafts] = useState<Record<string, string>>({})
   const [closedDeals, setClosedDeals] = useState<Record<string, boolean>>({})
   const [listingTitle, setListingTitle] = useState('Terreno esquinero cerca al malecon')
   const [listingPrice, setListingPrice] = useState('45000')
@@ -321,6 +450,8 @@ function App() {
     return Number.isFinite(parsed) ? parsed * 0.2 : 0
   }, [listingPrice])
 
+  const adRevenue = useMemo(() => paidAds.reduce((total, ad) => total + ad.budget, 0), [paidAds])
+  const availableAdRevenue = adRevenue - withdrawnAdRevenue
   const userTrustScore = useMemo(() => getTrustScore(['recommended', 'recommended', 'recommended']), [])
 
   const showAlert = (message: string) => {
@@ -515,6 +646,82 @@ function App() {
     showAlert(`Reporte ${ticketNumber} recibido. ${SUPPORT_AUTO_REPLY}`)
   }
 
+  const boostStatus = (statusId: string) => {
+    if (!requireKyc()) {
+      return
+    }
+
+    setStatusPosts((current) =>
+      current.map((status) =>
+        status.id === statusId ? { ...status, highlighted: true, reach: 100 } : status,
+      ),
+    )
+    setPaidAds((current) => [
+      ...current,
+      {
+        id: `boost-${Date.now()}`,
+        brand: session?.email ?? 'Usuario verificado',
+        country: 'Ecuador',
+        placement: 'Fotos',
+        budget: 25,
+        status: 'Activa',
+        visual: 'linear-gradient(145deg, #8ee8cb, #1f8a72 58%, #071c1b)',
+      },
+    ])
+    showAlert('Estado destacado al 100%. El pago de publicidad se suma a ingresos del propietario.')
+  }
+
+  const placeAuctionBid = (auctionId: string) => {
+    if (!requireKyc()) {
+      return
+    }
+
+    const amount = Number(bidDrafts[auctionId])
+    const auction = auctions.find((item) => item.id === auctionId)
+
+    if (!auction || !Number.isFinite(amount) || amount <= auction.currentBid) {
+      showAlert('La puja debe ser mayor a la puja actual de la subasta.')
+      return
+    }
+
+    setAuctions((current) =>
+      current.map((item) =>
+        item.id === auctionId
+          ? {
+              ...item,
+              currentBid: amount,
+              bids: [{ bidder: session?.email ?? 'Usuario verificado', amount }, ...item.bids],
+            }
+          : item,
+      ),
+    )
+    setBidDrafts((current) => ({ ...current, [auctionId]: '' }))
+    showAlert('Puja registrada correctamente en la subasta.')
+  }
+
+  const directBuyAuction = (auction: Auction) => {
+    if (!requireKyc()) {
+      return
+    }
+
+    showAlert(`Compra directa iniciada por ${formatMoney(auction.directBuyPrice)} en ${auction.title}.`)
+  }
+
+  const withdrawAdRevenue = () => {
+    if (!isOwner) {
+      showAlert('Solo el propietario principal verificado puede retirar ingresos publicitarios.')
+      return
+    }
+
+    if (availableAdRevenue <= 0) {
+      showAlert('No hay saldo publicitario disponible para retirar.')
+      return
+    }
+
+    setWithdrawnAdRevenue((current) => current + availableAdRevenue)
+    showAlert(`Retiro solicitado por ${formatMoney(availableAdRevenue)} de publicidad pagada.`)
+  }
+
   return (
     <main className="app-shell" style={depthStyle}>
       <div className="ambient ambient-one" />
@@ -540,6 +747,13 @@ function App() {
           </button>
           <button type="button" className={activeTab === 'perfil' ? 'is-active' : ''} onClick={() => setActiveTab('perfil')}>
             Perfil
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'configuracion' ? 'is-active' : ''}
+            onClick={() => setActiveTab('configuracion')}
+          >
+            Configuracion
           </button>
           <button type="button" className={activeTab === 'soporte' ? 'is-active' : ''} onClick={() => setActiveTab('soporte')}>
             Soporte
@@ -637,6 +851,109 @@ function App() {
                 <p>{category.description}</p>
               </article>
             ))}
+          </section>
+
+          <section className="status-section glass-card">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Estados en inicio</p>
+                <h2>Estados con alcance 50% y destacado pagado al 100%.</h2>
+              </div>
+              <span className="reach-policy">Organico 50% · Publicidad 100%</span>
+            </div>
+            <div className="status-grid">
+              {statusPosts.map((status) => (
+                <article className="status-card" key={status.id}>
+                  <div className="status-media" style={{ background: status.visual }}>
+                    <span>{status.mediaType}</span>
+                  </div>
+                  <div>
+                    <strong>{status.author}</strong>
+                    <p>{status.text}</p>
+                    <div className="reach-meter" aria-label={`Alcance ${status.reach}%`}>
+                      <span style={{ width: `${status.reach}%` }} />
+                    </div>
+                    <div className="status-actions">
+                      <span>{status.highlighted ? 'Destacado premium' : 'Alcance organico 50%'}</span>
+                      <button type="button" onClick={() => boostStatus(status.id)}>
+                        Pagar publicidad 100%
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="media-ads-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Fotos y videos con publicidad</p>
+                <h2>Anuncios internacionales de mayor presupuesto para monetizar la app.</h2>
+              </div>
+              <span className="reach-policy">Ingresos: {formatMoney(adRevenue)}</span>
+            </div>
+            <div className="paid-ad-grid">
+              {paidAds
+                .slice()
+                .sort((a, b) => b.budget - a.budget)
+                .map((ad) => (
+                  <article className="paid-ad-card glass-card" key={ad.id}>
+                    <div className="paid-ad-art" style={{ background: ad.visual }}>
+                      <span>{ad.placement}</span>
+                    </div>
+                    <div>
+                      <strong>{ad.brand}</strong>
+                      <p>{ad.country} · {ad.status} · presupuesto {formatMoney(ad.budget)}</p>
+                    </div>
+                  </article>
+                ))}
+            </div>
+          </section>
+
+          <section className="auction-section glass-card">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Subastas ordenadas por categoria</p>
+                <h2>Pujas, entrada de subasta y compra directa.</h2>
+              </div>
+              <span className="reach-policy">{auctions.length} subastas activas</span>
+            </div>
+            <div className="auction-grid">
+              {auctions
+                .slice()
+                .sort((a, b) => a.category.localeCompare(b.category))
+                .map((auction) => (
+                  <article className="auction-card" key={auction.id}>
+                    <div className="auction-art" style={{ background: auction.visual }}>
+                      <span>{auction.category}</span>
+                    </div>
+                    <div className="auction-body">
+                      <h3>{auction.title}</h3>
+                      <p>{auction.endsAt}</p>
+                      <div className="auction-prices">
+                        <span>Entrada <strong>{formatMoney(auction.entryPrice)}</strong></span>
+                        <span>Puja actual <strong>{formatMoney(auction.currentBid)}</strong></span>
+                        <span>Compra directa <strong>{formatMoney(auction.directBuyPrice)}</strong></span>
+                      </div>
+                      <div className="bid-row">
+                        <input
+                          inputMode="decimal"
+                          value={bidDrafts[auction.id] ?? ''}
+                          onChange={(event) =>
+                            setBidDrafts((current) => ({ ...current, [auction.id]: event.target.value }))
+                          }
+                          placeholder={`Puja mayor a ${formatMoney(auction.currentBid)}`}
+                        />
+                        <button type="button" onClick={() => placeAuctionBid(auction.id)}>Pujar</button>
+                      </div>
+                      <button className="primary-button" type="button" onClick={() => directBuyAuction(auction)}>
+                        Compra directa de subasta
+                      </button>
+                    </div>
+                  </article>
+                ))}
+            </div>
           </section>
 
           <section className="home-layout">
@@ -875,7 +1192,12 @@ function App() {
                   <span>Lives activos: 3</span>
                   <span>Eventos filtro: {moderationEvents.length}</span>
                   <span>Soporte: {supportTickets.length}</span>
+                  <span>Publicidad total: {formatMoney(adRevenue)}</span>
+                  <span>Saldo para retirar: {formatMoney(availableAdRevenue)}</span>
                 </div>
+                <button className="primary-button owner-withdraw" type="button" onClick={withdrawAdRevenue}>
+                  Retirar dinero de publicidad
+                </button>
                 <div className="support-admin-list">
                   <h3>Reportes de soporte en orden</h3>
                   {supportTickets.length === 0 ? (
@@ -911,6 +1233,62 @@ function App() {
               </section>
             )}
           </div>
+        </section>
+      ) : activeTab === 'configuracion' ? (
+        <section className="settings-layout">
+          <div className="settings-card glass-card">
+            <p className="eyebrow">Configuraciones profesionales</p>
+            <h2>Notificaciones, alcance, publicidad y monetizacion.</h2>
+            <div className="settings-grid">
+              <article>
+                <strong>Notificaciones</strong>
+                <p>Alertas de pujas, compras, soporte, verificacion, lives y pagos publicitarios.</p>
+                <button
+                  type="button"
+                  className={notificationsEnabled ? 'toggle is-on' : 'toggle'}
+                  onClick={() => setNotificationsEnabled((current) => !current)}
+                >
+                  {notificationsEnabled ? 'Activadas' : 'Desactivadas'}
+                </button>
+              </article>
+              <article>
+                <strong>Estados</strong>
+                <p>Todo estado inicia con alcance del 50%. Si el usuario paga publicidad, sube al 100%.</p>
+                <span className="settings-metric">50% gratis · 100% pagado</span>
+              </article>
+              <article>
+                <strong>Subastas</strong>
+                <p>Ordenadas por categoria con entrada, puja superior obligatoria y compra directa.</p>
+                <span className="settings-metric">{auctions.length} activas</span>
+              </article>
+              <article>
+                <strong>Publicidad en fotos y videos</strong>
+                <p>Anuncios de empresas con mayor presupuesto, visibles en el inicio y registrados para pago.</p>
+                <span className="settings-metric">{paidAds.length} campanas</span>
+              </article>
+            </div>
+          </div>
+
+          <aside className="wallet-card glass-card">
+            <p className="eyebrow">Billetera del propietario</p>
+            <h3>Ingresos por publicidad</h3>
+            <div className="wallet-balance">
+              <span>Recaudado</span>
+              <strong>{formatMoney(adRevenue)}</strong>
+            </div>
+            <div className="wallet-balance">
+              <span>Retirado</span>
+              <strong>{formatMoney(withdrawnAdRevenue)}</strong>
+            </div>
+            <div className="wallet-balance is-available">
+              <span>Disponible</span>
+              <strong>{formatMoney(availableAdRevenue)}</strong>
+            </div>
+            <button className="primary-button" type="button" onClick={withdrawAdRevenue}>
+              Retirar como propietario
+            </button>
+            {!isOwner && <p>El retiro se habilita solo al iniciar sesion como propietario verificado.</p>}
+          </aside>
         </section>
       ) : (
         <section className="support-layout">
