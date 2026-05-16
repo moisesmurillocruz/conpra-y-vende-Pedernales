@@ -150,6 +150,12 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.brand-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .brand-mark,
 .avatar,
 .profile-avatar {
@@ -624,20 +630,57 @@ textarea {
 }
 
 .blue-check {
-  display: inline-block;
-  width: 19px;
-  height: 19px;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 35% 32%, #fff, transparent 18%),
-    linear-gradient(145deg, #64c7ff, #116cff);
-  box-shadow: 0 0 18px rgba(60, 155, 255, 0.78);
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.94), transparent 15%),
+    linear-gradient(145deg, #2ec8ff 0%, #008cff 48%, #0066d8 100%);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.14),
+    0 0 20px rgba(0, 147, 255, 0.72),
+    0 10px 20px rgba(0, 52, 120, 0.36),
+    inset 2px 2px 5px rgba(255, 255, 255, 0.62),
+    inset -3px -4px 8px rgba(0, 34, 112, 0.46);
+  vertical-align: middle;
+}
+
+.blue-check::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-bottom: 2.7px solid #fff;
+  border-left: 2.7px solid #fff;
+  filter: drop-shadow(0 1px 1px rgba(0, 43, 120, 0.42));
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.verified-tiny {
+  width: 17px;
+  height: 17px;
+}
+
+.verified-tiny::after {
+  width: 7px;
+  height: 4px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
 }
 
 .large {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
+}
+
+.large::after {
+  width: 18px;
+  height: 10px;
+  border-bottom-width: 4px;
+  border-left-width: 4px;
 }
 
 .listing-meta {
@@ -792,6 +835,25 @@ textarea {
   justify-content: space-between;
   gap: 18px;
   align-items: flex-start;
+}
+
+.profile-title-row h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.profile-check {
+  width: 34px;
+  height: 34px;
+}
+
+.profile-check::after {
+  width: 14px;
+  height: 8px;
+  border-bottom-width: 3.5px;
+  border-left-width: 3.5px;
 }
 
 .verification-panel {

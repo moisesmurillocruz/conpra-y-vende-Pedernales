@@ -526,7 +526,12 @@ function App() {
           <span className="brand-mark">CV</span>
           <span>
             {APP_NAME}
-            <strong>{session ? session.email : 'Registro rapido'}</strong>
+            <strong className="brand-status">
+              {session ? session.email : 'Registro rapido'}
+              {session && effectiveVerified && (
+                <span className="blue-check verified-tiny" aria-label={verificationLabel} title={verificationLabel} />
+              )}
+            </strong>
           </span>
         </a>
         <div className="nav-links" aria-label="Secciones principales">
@@ -755,7 +760,12 @@ function App() {
               <div className="profile-avatar">{profilePhoto ? 'OK' : 'PV'}</div>
               <div className="profile-title-row">
                 <div>
-                  <h2>Perfil del usuario</h2>
+                  <h2>
+                    Perfil del usuario
+                    {effectiveVerified && (
+                      <span className="blue-check profile-check" aria-label={verificationLabel} title={verificationLabel} />
+                    )}
+                  </h2>
                   <p>{session?.email ?? 'Visitante sin sesion'} · {isOwner ? 'Propietario principal' : 'Cliente marketplace'}</p>
                 </div>
                 <button className="secondary-button" type="button">Editar perfil</button>
