@@ -1,8 +1,9 @@
 # Compra y venta pedernales
 
-Marketplace premium de alta gama para Pedernales. La aplicacion es una SPA React/Vite con
-experiencia movil, interfaz 3D/neumorfica, feed social de compra/venta, KYC obligatorio para
-operar, reputacion por transaccion y acceso oculto del propietario mediante servidor.
+Marketplace premium de alta gama para Pedernales. La aplicacion esta preparada para celulares
+Android y iOS mediante React/Vite, Capacitor y PWA instalable, con experiencia movil,
+interfaz 3D/neumorfica, feed social de compra/venta, KYC obligatorio para operar, reputacion por
+transaccion y acceso oculto del propietario mediante servidor.
 
 ## Flujos principales
 
@@ -69,6 +70,25 @@ npm run dev
 npm run build
 npm start
 ```
+
+## Android y iOS
+
+La base movil usa Capacitor para empaquetar la misma experiencia como app nativa Android/iOS.
+Primero compila y sincroniza:
+
+```bash
+npm run mobile:sync
+```
+
+Cuando existan los proyectos nativos generados por Capacitor, abre cada plataforma:
+
+```bash
+npm run mobile:android
+npm run mobile:ios
+```
+
+La interfaz incluye `viewport-fit=cover`, safe areas para notch/isla dinamica, navegacion inferior
+en celulares, controles tactiles de 44px y metadatos PWA para instalacion movil.
 
 ## Validacion
 

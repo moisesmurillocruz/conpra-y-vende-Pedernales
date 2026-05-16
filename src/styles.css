@@ -14,6 +14,7 @@
 
 html {
   scroll-behavior: smooth;
+  background: #0d0b10;
 }
 
 body {
@@ -21,6 +22,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 a {
@@ -37,6 +42,8 @@ textarea {
 
 button {
   cursor: pointer;
+  min-height: 44px;
+  touch-action: manipulation;
 }
 
 button:disabled {
@@ -50,8 +57,12 @@ button:disabled {
   --mx: 50%;
   --my: 50%;
   position: relative;
-  min-height: 100vh;
-  padding: 24px;
+  min-height: 100dvh;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
   background:
     radial-gradient(circle at var(--mx) var(--my), rgba(255, 213, 132, 0.2), transparent 24rem),
     radial-gradient(circle at 12% 18%, rgba(54, 214, 163, 0.15), transparent 22rem),
@@ -475,6 +486,7 @@ textarea {
   padding: 14px 15px;
   color: #fff;
   outline: 0;
+  font-size: 16px;
   background: rgba(5, 7, 10, 0.38);
   box-shadow:
     inset 8px 10px 18px rgba(0, 0, 0, 0.26),
@@ -488,6 +500,7 @@ select {
 textarea {
   min-height: 114px;
   resize: vertical;
+  -webkit-overflow-scrolling: touch;
 }
 
 .section-grid {
@@ -1336,18 +1349,45 @@ textarea {
 
 @media (max-width: 720px) {
   .top-nav {
-    position: static;
-    align-items: flex-start;
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    top: auto;
+    z-index: 40;
+    align-items: center;
+    width: auto;
+    padding: 10px;
     border-radius: 24px;
   }
 
+  .app-shell {
+    padding:
+      calc(16px + env(safe-area-inset-top))
+      calc(16px + env(safe-area-inset-right))
+      calc(112px + env(safe-area-inset-bottom))
+      calc(16px + env(safe-area-inset-left));
+  }
+
   .brand span:last-child {
-    max-width: 180px;
+    display: none;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .nav-links {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .nav-links button {
     padding: 8px 10px;
-    font-size: 0.84rem;
+    font-size: 0.78rem;
+    min-height: 42px;
   }
 
   h1 {
