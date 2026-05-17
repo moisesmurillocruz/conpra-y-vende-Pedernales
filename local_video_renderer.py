@@ -408,12 +408,13 @@ def main(argv: list[str] | None = None) -> int:
     encoder_parser.set_defaults(list_encoders=True)
 
     args = parser.parse_args(argv)
-    _ensure_ffmpeg()
 
     if args.command == "init-config":
         write_example_config(args.path, args.count)
         print(f"Wrote {args.path} with {args.count} local render jobs.")
         return 0
+
+    _ensure_ffmpeg()
 
     if args.command == "list-encoders":
         print(_ffmpeg_h264_encoders())
