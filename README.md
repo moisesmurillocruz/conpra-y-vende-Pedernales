@@ -28,7 +28,8 @@ python3 local_video_renderer.py render \
   --config configs/example_100_videos.json \
   --output-dir renders \
   --workers auto \
-  --encoder auto
+  --encoder auto \
+  --skip-existing
 ```
 
 Opciones utiles:
@@ -39,6 +40,27 @@ Opciones utiles:
 - `--encoder nvidia`: fuerza `h264_nvenc`.
 - `--limit N`: renderiza solo los primeros `N` trabajos para pruebas.
 - `--dry-run`: imprime los comandos FFmpeg sin renderizar.
+- `--skip-existing`: permite reanudar lotes grandes sin repetir MP4 ya creados.
+- `--manifest ruta.json`: guarda un reporte JSON con estado, tamanos, comandos y errores.
+- `--no-manifest`: desactiva el reporte JSON automatico `render_manifest.json`.
+
+Cada render normal escribe por defecto `renders/render_manifest.json`. Ese archivo
+sirve para auditar los 100 resultados, detectar fallos y repetir solo lo que falte
+con `--skip-existing`.
+
+## Validar antes de renderizar
+
+```bash
+python3 local_video_renderer.py validate \
+  --config configs/example_100_videos.json \
+  --output-dir renders \
+  --workers auto \
+  --encoder auto
+```
+
+La validacion revisa que no haya IDs duplicados, nombres de salida repetidos,
+assets inexistentes, dimensiones incompatibles con H.264 y encoders locales no
+disponibles.
 
 ## Formato de configuracion
 

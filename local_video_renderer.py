@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -57,6 +58,9 @@ class RenderResult:
     command: list[str]
     return_code: int
     stderr: str
+    size_bytes: int = 0
+    elapsed_seconds: float = 0.0
+    skipped: bool = False
 
 
 def load_plan(config_path: Path) -> list[RenderJob]:
@@ -110,6 +114,36 @@ def load_plan(config_path: Path) -> list[RenderJob]:
     return jobs
 
 
+def validate_jobs(jobs: list[RenderJob], output_dir: Path) -> list[str]:
+    errors: list[str] = []
+    seen_ids: set[str] = set()
+    seen_outputs: dict[str, str] = {}
+
+    for job in jobs:
+        if job.job_id in seen_ids:
+            errors.append(f"duplicate job id: {job.job_id}")
+        seen_ids.add(job.job_id)
+
+        if Path(job.output_name).name != job.output_name:
+            errors.append(f"{job.job_id}: output_name must be a file name, not a path")
+
+        output_key = str((output_dir / _safe_output_name(job.output_name)).resolve()).casefold()
+        if output_key in seen_outputs:
+            errors.append(
+                f"{job.job_id}: output collides with {seen_outputs[output_key]} at {job.output_name}"
+            )
+        seen_outputs[output_key] = job.job_id
+
+        if job.width % 2 or job.height % 2:
+            errors.append(f"{job.job_id}: width and height must be even for H.264/yuv420p")
+
+        for label, raw_path in (("source", job.source), ("audio", job.audio), ("font_file", job.font_file)):
+            if raw_path and not Path(raw_path).exists():
+                errors.append(f"{job.job_id}: {label} does not exist: {raw_path}")
+
+    return errors
+
+
 def build_ffmpeg_command(
     job: RenderJob,
     output_dir: Path,
@@ -117,7 +151,7 @@ def build_ffmpeg_command(
     text_dir: Path,
     overwrite: bool = True,
 ) -> tuple[list[str], Path]:
-    output_path = output_dir / _safe_output_name(job.output_name)
+    output_path = output_path_for_job(job, output_dir)
     selected_encoder = choose_encoder(encoder)
     title_file = _write_text_file(text_dir, f"{job.job_id}-title.txt", _wrap_text(job.title, 28))
     subtitle_file = _write_text_file(text_dir, f"{job.job_id}-subtitle.txt", _wrap_text(job.subtitle, 42))
@@ -137,12 +171,37 @@ def build_ffmpeg_command(
     return command, output_path
 
 
-def render_job(job: RenderJob, output_dir: Path, encoder: str, overwrite: bool = True) -> RenderResult:
+def output_path_for_job(job: RenderJob, output_dir: Path) -> Path:
+    return output_dir / _safe_output_name(job.output_name)
+
+
+def render_job(
+    job: RenderJob,
+    output_dir: Path,
+    encoder: str,
+    overwrite: bool = True,
+    skip_existing: bool = False,
+) -> RenderResult:
     output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_path_for_job(job, output_dir)
+    if skip_existing and output_path.exists() and output_path.stat().st_size > 0:
+        return RenderResult(job.job_id, str(output_path), [], 0, "", output_path.stat().st_size, 0.0, True)
+
     with tempfile.TemporaryDirectory(prefix="local-video-renderer-") as temp_root:
         command, output_path = build_ffmpeg_command(job, output_dir, encoder, Path(temp_root), overwrite)
+        started_at = time.perf_counter()
         completed = subprocess.run(command, text=True, capture_output=True, check=False)
-        return RenderResult(job.job_id, str(output_path), command, completed.returncode, completed.stderr)
+        elapsed = time.perf_counter() - started_at
+        size_bytes = output_path.stat().st_size if output_path.exists() else 0
+        return RenderResult(
+            job.job_id,
+            str(output_path),
+            command,
+            completed.returncode,
+            completed.stderr,
+            size_bytes,
+            elapsed,
+        )
 
 
 def render_all(
@@ -152,10 +211,13 @@ def render_all(
     workers: int | str,
     dry_run: bool,
     overwrite: bool,
+    skip_existing: bool,
+    manifest_path: Path | None,
 ) -> int:
     worker_count = determine_workers(workers, len(jobs))
+    selected_encoder = choose_encoder(encoder)
     print(f"Rendering {len(jobs)} video(s) locally with {worker_count} worker(s).")
-    print(f"Encoder: {choose_encoder(encoder)}")
+    print(f"Encoder: {selected_encoder}")
 
     if dry_run:
         with tempfile.TemporaryDirectory(prefix="local-video-renderer-dry-run-") as temp_root:
@@ -166,23 +228,85 @@ def render_all(
         return 0
 
     failures: list[RenderResult] = []
+    results: list[RenderResult] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_to_job = {
-            executor.submit(render_job, job, output_dir, encoder, overwrite): job for job in jobs
+            executor.submit(render_job, job, output_dir, selected_encoder, overwrite, skip_existing): job
+            for job in jobs
         }
+        completed_count = 0
         for future in concurrent.futures.as_completed(future_to_job):
             result = future.result()
-            if result.return_code == 0:
-                print(f"[ok] {result.job_id} -> {result.output_path}")
+            completed_count += 1
+            progress = f"({completed_count}/{len(jobs)})"
+            results.append(result)
+            if result.skipped:
+                print(f"[skip] {progress} {result.job_id} -> {result.output_path}")
+            elif result.return_code == 0:
+                print(
+                    f"[ok] {progress} {result.job_id} -> {result.output_path} "
+                    f"({result.size_bytes} bytes, {result.elapsed_seconds:.2f}s)"
+                )
             else:
                 failures.append(result)
-                print(f"[failed] {result.job_id}", file=sys.stderr)
+                print(f"[failed] {progress} {result.job_id}", file=sys.stderr)
                 print(result.stderr.strip(), file=sys.stderr)
+
+    if manifest_path:
+        write_manifest(manifest_path, jobs, results, output_dir, selected_encoder, worker_count)
+        print(f"Wrote manifest: {manifest_path}")
 
     if failures:
         print(f"{len(failures)} render job(s) failed.", file=sys.stderr)
         return 1
     return 0
+
+
+def write_manifest(
+    manifest_path: Path,
+    jobs: list[RenderJob],
+    results: list[RenderResult],
+    output_dir: Path,
+    encoder: str,
+    worker_count: int,
+) -> None:
+    order = {job.job_id: index for index, job in enumerate(jobs)}
+    ordered_results = sorted(results, key=lambda result: order.get(result.job_id, len(order)))
+    payload = {
+        "renderer": "local_video_renderer",
+        "created_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "output_dir": str(output_dir),
+        "encoder": encoder,
+        "worker_count": worker_count,
+        "totals": {
+            "jobs": len(jobs),
+            "ok": sum(1 for result in ordered_results if result.return_code == 0 and not result.skipped),
+            "skipped": sum(1 for result in ordered_results if result.skipped),
+            "failed": sum(1 for result in ordered_results if result.return_code != 0),
+        },
+        "results": [
+            {
+                "job_id": result.job_id,
+                "status": "skipped" if result.skipped else "ok" if result.return_code == 0 else "failed",
+                "output_path": result.output_path,
+                "size_bytes": result.size_bytes,
+                "elapsed_seconds": round(result.elapsed_seconds, 3),
+                "command": result.command,
+                "stderr": result.stderr.strip(),
+            }
+            for result in ordered_results
+        ],
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def validate_encoder(requested: str) -> list[str]:
+    selected = choose_encoder(requested)
+    if not _ffmpeg_encoder_exists(selected):
+        available = ", ".join(sorted(_ffmpeg_encoder_names())) or "none"
+        return [f"FFmpeg encoder is not available: {selected}. Available encoders include: {available}"]
+    return []
 
 
 def choose_encoder(requested: str) -> str:
@@ -269,6 +393,16 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--limit", type=int, help="render only the first N jobs")
     render_parser.add_argument("--dry-run", action="store_true")
     render_parser.add_argument("--no-overwrite", action="store_true")
+    render_parser.add_argument("--skip-existing", action="store_true", help="resume by skipping non-empty outputs")
+    render_parser.add_argument("--manifest", type=Path, help="write render report JSON to this path")
+    render_parser.add_argument("--no-manifest", action="store_true", help="disable the default render manifest")
+
+    validate_parser = subparsers.add_parser("validate", help="validate config, assets, and encoder")
+    validate_parser.add_argument("--config", type=Path, required=True)
+    validate_parser.add_argument("--output-dir", type=Path, default=Path("renders"))
+    validate_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
+    validate_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
+    validate_parser.add_argument("--limit", type=int, help="validate only the first N jobs")
 
     encoder_parser = subparsers.add_parser("list-encoders", help="show local FFmpeg H.264 encoders")
     encoder_parser.set_defaults(list_encoders=True)
@@ -291,7 +425,29 @@ def main(argv: list[str] | None = None) -> int:
     if not jobs:
         raise SystemExit("No jobs selected.")
 
-    return render_all(jobs, args.output_dir, args.encoder, args.workers, args.dry_run, not args.no_overwrite)
+    errors = validate_jobs(jobs, args.output_dir) + validate_encoder(args.encoder)
+    if errors:
+        print("Validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 2
+
+    worker_count = determine_workers(args.workers, len(jobs))
+    if args.command == "validate":
+        print(f"Validation OK: {len(jobs)} job(s), {worker_count} worker(s), encoder {choose_encoder(args.encoder)}.")
+        return 0
+
+    manifest_path = None if args.no_manifest else args.manifest or args.output_dir / "render_manifest.json"
+    return render_all(
+        jobs,
+        args.output_dir,
+        args.encoder,
+        args.workers,
+        args.dry_run,
+        not args.no_overwrite,
+        args.skip_existing,
+        manifest_path,
+    )
 
 
 def _encoder_args(encoder: str, job: RenderJob) -> list[str]:
@@ -445,7 +601,7 @@ def _ensure_ffmpeg() -> None:
 
 
 def _ffmpeg_encoder_exists(name: str) -> bool:
-    return name in _ffmpeg_h264_encoders()
+    return name in _ffmpeg_encoder_names()
 
 
 def _ffmpeg_h264_encoders() -> str:
@@ -456,6 +612,21 @@ def _ffmpeg_h264_encoders() -> str:
         check=False,
     )
     return "\n".join(line for line in completed.stdout.splitlines() if "h264" in line.lower())
+
+
+def _ffmpeg_encoder_names() -> set[str]:
+    completed = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-encoders"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    names: set[str] = set()
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith("V"):
+            names.add(parts[1])
+    return names
 
 
 def _has_nvidia_runtime() -> bool:
