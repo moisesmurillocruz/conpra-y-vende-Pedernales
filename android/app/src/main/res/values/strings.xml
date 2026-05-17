@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Koramoy</string>
+    <string name="title_activity_main">Koramoy</string>
+    <string name="package_name">com.koramoy.app</string>
+    <string name="custom_url_scheme">com.koramoy.app</string>
+</resources>

@@ -7,9 +7,20 @@ import {
   starsToUsd,
   usdToStars,
 } from "./stars";
-import { demoProfile } from "../data/campaigns";
+import type { UserProfile } from "../types";
 
-describe("sistema de estrellas Coramoy", () => {
+const demoProfile: UserProfile = {
+  name: "Andrea Morales",
+  email: "andrea@koramoy.ec",
+  publicBadge: "Plata",
+  starsBalance: 18500,
+  kycStatus: "pendiente",
+  bankAccountVerified: false,
+  ownedCampaignIds: [],
+  withdrawalAlerts: [],
+};
+
+describe("sistema de estrellas Koramoy", () => {
   it("convierte 100 estrellas en 1 dolar exacto", () => {
     expect(usdToStars(1)).toBe(100);
     expect(usdToStars(25.5)).toBe(2550);

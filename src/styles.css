@@ -109,62 +109,18 @@ button {
   gap: 10px;
 }
 
-.logo__heart {
-  position: relative;
+.logo img {
+  display: block;
+  width: min(164px, 44vw);
+  max-height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(109, 33, 79, 0.2));
+}
+
+.logo--compact img {
   width: 44px;
   height: 44px;
   border-radius: 16px;
-  background: linear-gradient(145deg, #ff4f7f, #8e1f65 62%, #541048);
-  box-shadow:
-    0 12px 22px rgba(160, 29, 98, 0.34),
-    inset -5px -6px 12px rgba(61, 4, 45, 0.28),
-    inset 5px 5px 12px rgba(255, 255, 255, 0.2);
-  transform: rotate(-12deg);
-}
-
-.logo__heart::before,
-.logo__heart::after {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: inherit;
-  content: "";
-}
-
-.logo__heart::before {
-  top: -10px;
-  left: 0;
-}
-
-.logo__heart::after {
-  top: 0;
-  right: -10px;
-}
-
-.logo__heart span {
-  position: absolute;
-  top: 9px;
-  left: 12px;
-  z-index: 1;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.46);
-  filter: blur(4px);
-}
-
-.logo strong {
-  display: block;
-  font-size: 1.25rem;
-  letter-spacing: -0.04em;
-}
-
-.logo small {
-  display: block;
-  margin-top: -2px;
-  color: #8a6a82;
-  font-size: 0.72rem;
 }
 
 .topbar,
@@ -761,6 +717,196 @@ button {
 
 .bottom-nav svg {
   width: 18px;
+}
+
+.auth-frame {
+  justify-content: flex-start;
+}
+
+.form-card,
+.empty-state,
+.live-directory {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  color: #f7eaf0;
+  background: linear-gradient(145deg, rgba(35, 12, 32, 0.92), rgba(83, 22, 63, 0.88));
+  box-shadow:
+    0 24px 44px rgba(24, 4, 20, 0.28),
+    inset 8px 8px 18px rgba(255, 255, 255, 0.04),
+    inset -8px -8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.form-card h2,
+.empty-state h2 {
+  margin: 0;
+}
+
+.form-card p,
+.empty-state p,
+.system-notice {
+  margin: 0;
+  color: #b99aae;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.system-notice {
+  padding: 12px;
+  border-radius: 18px;
+  color: #6d214f;
+  background: rgba(255, 232, 239, 0.82);
+  font-weight: 800;
+}
+
+.form-card input,
+.form-card textarea,
+.comment-box input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  border-radius: 18px;
+  padding: 13px 14px;
+  color: #2a1526;
+  background: #fff4f8;
+  box-shadow:
+    inset 5px 5px 11px rgba(108, 45, 84, 0.1),
+    inset -6px -6px 12px rgba(255, 255, 255, 0.84);
+}
+
+.form-card textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.ghost-button {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  color: #ffdbe6;
+  background: transparent;
+  font-weight: 900;
+}
+
+.empty-state {
+  place-items: center;
+  color: #fff;
+  text-align: center;
+}
+
+.empty-state svg {
+  width: 44px;
+  height: 44px;
+  color: #ffb13d;
+}
+
+.live-directory {
+  color: #fff;
+}
+
+.live-directory strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-directory div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.live-directory span,
+.ticker {
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #6d214f;
+  background: #ffe8ef;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: tickerMove 11s linear infinite;
+}
+
+@keyframes tickerMove {
+  from {
+    text-indent: 100%;
+  }
+  to {
+    text-indent: -120%;
+  }
+}
+
+.campaign-placeholder {
+  display: grid;
+  height: 210px;
+  place-items: center;
+  color: #ffd9e5;
+  background: linear-gradient(145deg, #3d0c32, #7a1d5a);
+}
+
+.comment-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.comment-box button {
+  display: grid;
+  width: 48px;
+  place-items: center;
+  border: 0;
+  border-radius: 18px;
+  color: #fff;
+  background: linear-gradient(145deg, #ff5c84, #6d214f);
+}
+
+.kyc-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(16, 4, 18, 0.64);
+  backdrop-filter: blur(10px);
+}
+
+.kyc-modal > div {
+  display: grid;
+  gap: 12px;
+  max-width: 360px;
+  padding: 22px;
+  border-radius: 28px;
+  color: #2a1526;
+  background: #fff8fb;
+  box-shadow: 0 28px 58px rgba(0, 0, 0, 0.32);
+}
+
+.kyc-modal svg {
+  width: 42px;
+  height: 42px;
+  color: #13a874;
+}
+
+.owner-control {
+  color: #fff;
+  background: linear-gradient(145deg, #181223, #6d214f);
+}
+
+.owner-control small {
+  color: #ffd8e5;
+}
+
+.profile-action input[type="file"] {
+  max-width: 100%;
+  color: #765d70;
 }
 
 @media (max-width: 520px) {

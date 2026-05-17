@@ -23,7 +23,7 @@ export function OwnerDashboard({ alerts }: OwnerDashboardProps) {
         <article>
           <ShieldAlert />
           <strong>30%</strong>
-          <span>comision fija Coramoy</span>
+          <span>comision fija Koramoy</span>
         </article>
         <article>
           <CircleDollarSign />
@@ -43,7 +43,7 @@ export function OwnerDashboard({ alerts }: OwnerDashboardProps) {
                 Solicitado ${starsToUsd(alert.requestedStars).toLocaleString("es-EC")} · Neto $
                 {starsToUsd(alert.netStars).toLocaleString("es-EC")}
               </span>
-              <small>Comision Coramoy: {alert.ownerCommissionStars.toLocaleString("es-EC")} estrellas</small>
+              <small>Comision Koramoy: {alert.ownerCommissionStars.toLocaleString("es-EC")} estrellas</small>
             </article>
           ))}
         </div>

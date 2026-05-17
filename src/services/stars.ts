@@ -1,5 +1,7 @@
-import { ECUADOR_STAR_RATE, OWNER_COMMISSION_RATE } from "../data/campaigns";
 import type { UserProfile, WithdrawalAlert } from "../types";
+
+export const ECUADOR_STAR_RATE = 100;
+export const OWNER_COMMISSION_RATE = 0.3;
 
 export function usdToStars(usd: number): number {
   if (!Number.isFinite(usd) || usd <= 0) {
