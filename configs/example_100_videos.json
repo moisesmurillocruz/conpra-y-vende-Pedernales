@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "duration": 8,
+    "background": "#101827",
+    "font_color": "white",
+    "subtitle_color": "#dbeafe",
+    "font_size": 64,
+    "subtitle_size": 34,
+    "crf": 20,
+    "preset": "medium"
+  },
+  "count": 100,
+  "job_template": {
+    "id": "video-{index:03d}",
+    "title": "Video local {index:03d}",
+    "subtitle": "Renderizado sin servidores externos usando FFmpeg local",
+    "output_name": "video-{index:03d}.mp4"
+  }
+}
