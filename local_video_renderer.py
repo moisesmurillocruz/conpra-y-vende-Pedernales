@@ -20,12 +20,86 @@ from typing import Any, Iterable
 
 
 IMAGE_SUFFIXES = {".apng", ".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+VIDEO_SUFFIXES = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
+AUDIO_SUFFIXES = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
+AVATAR_POSITIONS = {
+    "bottom_center": ("(main_w-overlay_w)/2", "main_h-overlay_h-40"),
+    "bottom_right": ("main_w-overlay_w-40", "main_h-overlay_h-40"),
+    "bottom_left": ("40", "main_h-overlay_h-40"),
+    "top_right": ("main_w-overlay_w-40", "40"),
+    "top_left": ("40", "40"),
+}
+AVATAR_POSITION_ALIASES = {
+    "medio_abajo": "bottom_center",
+    "centro_abajo": "bottom_center",
+    "abajo_medio": "bottom_center",
+    "derecha_abajo": "bottom_right",
+    "abajo_derecha": "bottom_right",
+    "izquierda_abajo": "bottom_left",
+    "abajo_izquierda": "bottom_left",
+    "derecha_arriba": "top_right",
+    "arriba_derecha": "top_right",
+    "izquierda_arriba": "top_left",
+    "arriba_izquierda": "top_left",
+}
 DEFAULT_FONT_PATHS = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "C:/Windows/Fonts/arialbd.ttf",
 )
+MOITHANO_NICHES = [
+    "casos de la vida real",
+    "historias de Dios",
+    "verdad o falso",
+    "preguntas biblicas A B C D",
+    "historias por capitulos",
+    "reflexiones profundas",
+    "superacion personal",
+    "familia y valores",
+    "milagros y testimonios",
+    "misterios historicos",
+    "datos curiosos",
+    "experimentos cientificos",
+    "salud y bienestar",
+    "educacion y aprendizaje",
+    "motivacion personal",
+    "relaciones humanas",
+    "criminalistica y detectives",
+    "naturaleza y medio ambiente",
+    "universo y astronomia",
+    "animales salvajes",
+    "tecnologia e innovacion",
+    "historias militares",
+    "geopolitica y conflictos",
+    "boxeo e historia del combate",
+    "futbol y deporte",
+    "peliculas y analisis",
+    "arqueologia",
+    "mitos y leyendas",
+    "fabulas y cuentos morales",
+    "historias de drama real",
+    "preguntas hipoteticas",
+    "contenido biblico familiar",
+    "enigmas sin resolver",
+    "documentales cortos",
+    "biografias impactantes",
+    "emprendimiento",
+    "finanzas personales",
+    "seguridad digital",
+    "psicologia cotidiana",
+    "historia universal",
+    "cultura latina",
+    "curiosidades de animales",
+    "historias de rescate",
+    "lecciones para jovenes",
+    "consejos para padres",
+    "oraciones y meditaciones",
+    "retos de conocimiento",
+    "antes y despues",
+    "leyendas urbanas",
+    "historias de esperanza",
+]
 
 
 @dataclass(frozen=True)
@@ -49,6 +123,17 @@ class RenderJob:
     crf: int
     preset: str
     video_bitrate: str | None
+    voice_audio: str | None
+    music: str | None
+    music_volume: int
+    presentation_mode: str
+    avatar: str | None
+    avatar_position: str
+    avatar_size_percent: int
+    niche: str
+    chapter: int | None
+    voice_provider: str
+    voice_name: str
 
 
 @dataclass(frozen=True)
@@ -63,9 +148,19 @@ class RenderResult:
     skipped: bool = False
 
 
+@dataclass(frozen=True)
+class InputLayout:
+    voice_index: int | None = None
+    music_index: int | None = None
+    avatar_index: int | None = None
+
+
 def load_plan(config_path: Path) -> list[RenderJob]:
     data = json.loads(config_path.read_text(encoding="utf-8"))
     defaults = data.get("defaults", {})
+    folders = data.get("folders", {})
+    music_dir = _optional_path(folders.get("music_dir") or folders.get("music"), config_path)
+    avatar_dir = _optional_path(folders.get("avatar_dir") or folders.get("avatars"), config_path)
     raw_jobs: list[dict[str, Any]] = []
 
     if "count" in data:
@@ -108,6 +203,19 @@ def load_plan(config_path: Path) -> list[RenderJob]:
                 crf=_positive_int(merged.get("crf", 20), "crf"),
                 preset=str(merged.get("preset", "medium")),
                 video_bitrate=merged.get("video_bitrate"),
+                voice_audio=_optional_path(merged.get("voice_audio") or merged.get("audio"), config_path),
+                music=_asset_path(merged.get("music"), music_dir, config_path, AUDIO_SUFFIXES),
+                music_volume=_bounded_int(merged.get("music_volume", 35), "music_volume", 1, 200),
+                presentation_mode=normalize_presentation_mode(str(merged.get("presentation_mode", "voice_only"))),
+                avatar=_asset_path(merged.get("avatar"), avatar_dir, config_path, IMAGE_SUFFIXES | VIDEO_SUFFIXES),
+                avatar_position=normalize_avatar_position(str(merged.get("avatar_position", "bottom_right"))),
+                avatar_size_percent=_bounded_int(
+                    merged.get("avatar_size_percent", 28), "avatar_size_percent", 5, 100
+                ),
+                niche=str(merged.get("niche", "")),
+                chapter=_optional_int(merged.get("chapter")),
+                voice_provider=str(merged.get("voice_provider", "microsoft_edge")),
+                voice_name=str(merged.get("voice_name", "auto")),
             )
         )
 
@@ -137,9 +245,19 @@ def validate_jobs(jobs: list[RenderJob], output_dir: Path) -> list[str]:
         if job.width % 2 or job.height % 2:
             errors.append(f"{job.job_id}: width and height must be even for H.264/yuv420p")
 
-        for label, raw_path in (("source", job.source), ("audio", job.audio), ("font_file", job.font_file)):
+        for label, raw_path in (
+            ("source", job.source),
+            ("audio", job.audio),
+            ("voice_audio", job.voice_audio),
+            ("music", job.music),
+            ("avatar", job.avatar),
+            ("font_file", job.font_file),
+        ):
             if raw_path and not Path(raw_path).exists():
                 errors.append(f"{job.job_id}: {label} does not exist: {raw_path}")
+
+        if job.presentation_mode == "avatar" and not job.avatar:
+            errors.append(f"{job.job_id}: presentation_mode avatar requires avatar")
 
     return errors
 
@@ -157,17 +275,21 @@ def build_ffmpeg_command(
     subtitle_file = _write_text_file(text_dir, f"{job.job_id}-subtitle.txt", _wrap_text(job.subtitle, 42))
 
     command = ["ffmpeg", "-y" if overwrite else "-n", "-hide_banner", "-loglevel", "error"]
-    command.extend(_input_args(job))
-    command.extend(["-vf", _video_filter(job, title_file, subtitle_file)])
+    input_args, layout = _input_args(job)
+    command.extend(input_args)
 
-    if job.audio:
-        command.extend(["-map", "0:v:0", "-map", "1:a:0", "-shortest", "-t", _duration(job.duration)])
-        command.extend(["-c:a", "aac", "-b:a", "192k"])
+    filter_graph, audio_filter = _filter_graph(job, title_file, subtitle_file, layout)
+    command.extend(["-filter_complex", filter_graph, "-map", "[vout]"])
+
+    if audio_filter:
+        command.extend(["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"])
+    elif layout.voice_index is not None:
+        command.extend(["-map", f"{layout.voice_index}:a:0", "-c:a", "aac", "-b:a", "192k"])
     else:
         command.append("-an")
 
     command.extend(_encoder_args(selected_encoder, job))
-    command.extend(["-movflags", "+faststart", str(output_path)])
+    command.extend(["-t", _duration(job.duration), "-movflags", "+faststart", str(output_path)])
     return command, output_path
 
 
@@ -287,6 +409,11 @@ def write_manifest(
         "results": [
             {
                 "job_id": result.job_id,
+                "niche": jobs[order[result.job_id]].niche if result.job_id in order else "",
+                "chapter": jobs[order[result.job_id]].chapter if result.job_id in order else None,
+                "presentation_mode": jobs[order[result.job_id]].presentation_mode if result.job_id in order else "",
+                "voice_provider": jobs[order[result.job_id]].voice_provider if result.job_id in order else "",
+                "voice_name": jobs[order[result.job_id]].voice_name if result.job_id in order else "",
                 "status": "skipped" if result.skipped else "ok" if result.return_code == 0 else "failed",
                 "output_path": result.output_path,
                 "size_bytes": result.size_bytes,
@@ -346,6 +473,46 @@ def normalize_color(value: str) -> str:
     return value
 
 
+def normalize_presentation_mode(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "solo_voz": "voice_only",
+        "voz": "voice_only",
+        "voice": "voice_only",
+        "narration_only": "voice_only",
+        "con_avatar": "avatar",
+        "avatar_hablando": "avatar",
+        "avatar_speaking": "avatar",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"voice_only", "avatar"}:
+        raise ValueError("presentation_mode must be voice_only or avatar")
+    return normalized
+
+
+def normalize_avatar_position(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = AVATAR_POSITION_ALIASES.get(normalized, normalized)
+    if normalized not in AVATAR_POSITIONS:
+        options = ", ".join(sorted(AVATAR_POSITIONS))
+        raise ValueError(f"avatar_position must be one of: {options}")
+    return normalized
+
+
+def resolve_output_dir(config_path: Path, requested_output_dir: Path | None) -> Path:
+    if requested_output_dir:
+        return requested_output_dir
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    folders = data.get("folders", {})
+    configured = folders.get("final_dir") or folders.get("finished_dir") or folders.get("output_dir")
+    if configured:
+        path = Path(str(configured)).expanduser()
+        if not path.is_absolute():
+            path = (config_path.parent / path).resolve()
+        return path
+    return Path("renders")
+
+
 def shlex_join(command: Iterable[str]) -> str:
     return " ".join(_shell_quote(part) for part in command)
 
@@ -353,6 +520,20 @@ def shlex_join(command: Iterable[str]) -> str:
 def write_example_config(path: Path, count: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     example = {
+        "app": {
+            "name": "Generador de Videos IA Moithano",
+            "icon": "assets/moithano_icon.svg",
+            "theme": "military_lion",
+            "ai_video_provider": "sora2",
+            "voice_providers": ["microsoft_edge", "levelup_paid", "elevenlabs", "openai_tts"],
+        },
+        "folders": {
+            "input_dir": "ejemplos/entrada",
+            "final_dir": "ejemplos/videos_finalizados",
+            "music_dir": "ejemplos/musica_fondo",
+            "avatar_dir": "ejemplos/avatares",
+        },
+        "niches": MOITHANO_NICHES,
         "defaults": {
             "width": 1280,
             "height": 720,
@@ -365,6 +546,14 @@ def write_example_config(path: Path, count: int) -> None:
             "subtitle_size": 34,
             "crf": 20,
             "preset": "medium",
+            "presentation_mode": "voice_only",
+            "avatar": "",
+            "avatar_position": "bottom_right",
+            "avatar_size_percent": 28,
+            "music": "",
+            "music_volume": 35,
+            "voice_provider": "microsoft_edge",
+            "voice_name": "auto",
         },
         "count": count,
         "job_template": {
@@ -372,6 +561,8 @@ def write_example_config(path: Path, count: int) -> None:
             "title": "Video local {index:03d}",
             "subtitle": "Renderizado sin servidores externos usando FFmpeg local",
             "output_name": "video-{index:03d}.mp4",
+            "niche": "historias por capitulos",
+            "chapter": "{index}",
         },
     }
     path.write_text(json.dumps(example, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -387,7 +578,7 @@ def main(argv: list[str] | None = None) -> int:
 
     render_parser = subparsers.add_parser("render", help="render videos from a JSON config")
     render_parser.add_argument("--config", type=Path, required=True)
-    render_parser.add_argument("--output-dir", type=Path, default=Path("renders"))
+    render_parser.add_argument("--output-dir", type=Path, help="overrides folders.final_dir from config")
     render_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
     render_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
     render_parser.add_argument("--limit", type=int, help="render only the first N jobs")
@@ -399,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
 
     validate_parser = subparsers.add_parser("validate", help="validate config, assets, and encoder")
     validate_parser.add_argument("--config", type=Path, required=True)
-    validate_parser.add_argument("--output-dir", type=Path, default=Path("renders"))
+    validate_parser.add_argument("--output-dir", type=Path, help="overrides folders.final_dir from config")
     validate_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
     validate_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
     validate_parser.add_argument("--limit", type=int, help="validate only the first N jobs")
@@ -420,13 +611,14 @@ def main(argv: list[str] | None = None) -> int:
         print(_ffmpeg_h264_encoders())
         return 0
 
+    output_dir = resolve_output_dir(args.config, args.output_dir)
     jobs = load_plan(args.config)
     if args.limit is not None:
         jobs = jobs[: max(0, args.limit)]
     if not jobs:
         raise SystemExit("No jobs selected.")
 
-    errors = validate_jobs(jobs, args.output_dir) + validate_encoder(args.encoder)
+    errors = validate_jobs(jobs, output_dir) + validate_encoder(args.encoder)
     if errors:
         print("Validation failed:", file=sys.stderr)
         for error in errors:
@@ -438,10 +630,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Validation OK: {len(jobs)} job(s), {worker_count} worker(s), encoder {choose_encoder(args.encoder)}.")
         return 0
 
-    manifest_path = None if args.no_manifest else args.manifest or args.output_dir / "render_manifest.json"
+    manifest_path = None if args.no_manifest else args.manifest or output_dir / "render_manifest.json"
     return render_all(
         jobs,
-        args.output_dir,
+        output_dir,
         args.encoder,
         args.workers,
         args.dry_run,
@@ -477,7 +669,12 @@ def _format_template_value(value: Any, context: dict[str, int]) -> Any:
     return value
 
 
-def _input_args(job: RenderJob) -> list[str]:
+def _input_args(job: RenderJob) -> tuple[list[str], InputLayout]:
+    next_index = 1
+    voice_index = None
+    music_index = None
+    avatar_index = None
+
     if job.source:
         source_path = Path(job.source)
         if source_path.suffix.lower() in IMAGE_SUFFIXES:
@@ -492,12 +689,41 @@ def _input_args(job: RenderJob) -> list[str]:
             f"color=c={job.background}:s={job.width}x{job.height}:r={job.fps}:d={_duration(job.duration)}",
         ]
 
-    if job.audio:
-        args.extend(["-stream_loop", "-1", "-i", job.audio])
-    return args
+    if job.voice_audio:
+        args.extend(["-i", job.voice_audio])
+        voice_index = next_index
+        next_index += 1
+    if job.music:
+        args.extend(_looping_input_args(job.music, job.duration))
+        music_index = next_index
+        next_index += 1
+    if job.presentation_mode == "avatar" and job.avatar:
+        args.extend(_looping_input_args(job.avatar, job.duration))
+        avatar_index = next_index
+
+    return args, InputLayout(voice_index, music_index, avatar_index)
 
 
-def _video_filter(job: RenderJob, title_file: Path, subtitle_file: Path) -> str:
+def _filter_graph(job: RenderJob, title_file: Path, subtitle_file: Path, layout: InputLayout) -> tuple[str, bool]:
+    filters = _video_filters(job, title_file, subtitle_file)
+    graph_parts = [f"[0:v]{','.join(filters)}[base]"]
+
+    if layout.avatar_index is not None:
+        avatar_width = max(24, int(job.width * job.avatar_size_percent / 100))
+        x_position, y_position = AVATAR_POSITIONS[job.avatar_position]
+        graph_parts.append(f"[{layout.avatar_index}:v]scale={avatar_width}:-1[avatar]")
+        graph_parts.append(f"[base][avatar]overlay=x={x_position}:y={y_position}:format=auto[vout]")
+    else:
+        graph_parts.append("[base]null[vout]")
+
+    audio_filter = _audio_filter(job, layout)
+    if audio_filter:
+        graph_parts.append(audio_filter)
+
+    return ";".join(graph_parts), bool(audio_filter)
+
+
+def _video_filters(job: RenderJob, title_file: Path, subtitle_file: Path) -> list[str]:
     filters = []
     if job.source:
         filters.append(
@@ -527,7 +753,28 @@ def _video_filter(job: RenderJob, title_file: Path, subtitle_file: Path) -> str:
             f"y=({job.height}-text_h)/2+{max(18, job.font_size // 2)}:"
             "line_spacing=8"
         )
-    return ",".join(filters)
+    return filters
+
+
+def _audio_filter(job: RenderJob, layout: InputLayout) -> str:
+    if layout.voice_index is not None and layout.music_index is not None:
+        volume = job.music_volume / 100
+        return (
+            f"[{layout.voice_index}:a]volume=1.0[voice];"
+            f"[{layout.music_index}:a]volume={volume:.2f}[music];"
+            "[voice][music]amix=inputs=2:duration=longest:dropout_transition=2[aout]"
+        )
+    if layout.music_index is not None:
+        volume = job.music_volume / 100
+        return f"[{layout.music_index}:a]volume={volume:.2f}[aout]"
+    return ""
+
+
+def _looping_input_args(path: str, duration: float) -> list[str]:
+    suffix = Path(path).suffix.lower()
+    if suffix in IMAGE_SUFFIXES:
+        return ["-loop", "1", "-t", _duration(duration), "-i", path]
+    return ["-stream_loop", "-1", "-t", _duration(duration), "-i", path]
 
 
 def _write_text_file(directory: Path, filename: str, content: str) -> Path:
@@ -552,11 +799,53 @@ def _optional_path(value: Any, config_path: Path) -> str | None:
     return str(path)
 
 
+def _asset_path(value: Any, asset_dir: str | None, config_path: Path, suffixes: set[str]) -> str | None:
+    if value in (None, ""):
+        return None
+    if str(value).strip().lower() == "auto":
+        return _first_asset(asset_dir, suffixes)
+
+    path = Path(str(value)).expanduser()
+    if path.is_absolute():
+        return str(path)
+
+    if asset_dir:
+        candidate = Path(asset_dir) / path
+        if candidate.exists():
+            return str(candidate.resolve())
+    return str((config_path.parent / path).resolve())
+
+
+def _first_asset(asset_dir: str | None, suffixes: set[str]) -> str | None:
+    if not asset_dir:
+        return None
+    root = Path(asset_dir)
+    if not root.exists():
+        return None
+    for path in sorted(root.iterdir()):
+        if path.is_file() and path.suffix.lower() in suffixes:
+            return str(path.resolve())
+    return None
+
+
 def _positive_int(value: Any, name: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise ValueError(f"{name} must be greater than zero")
     return parsed
+
+
+def _bounded_int(value: Any, name: str, minimum: int, maximum: int) -> int:
+    parsed = int(value)
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return parsed
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
 
 
 def _positive_float(value: Any, name: str) -> float:

@@ -1,9 +1,13 @@
-# Local Video Renderer
+# Generador de Videos IA Moithano
 
 Renderiza lotes de videos en una computadora local con FFmpeg, sin enviar
 assets ni trabajos a servidores externos. El CLI puede generar una plantilla de
 100 videos, repartir el render entre varios procesos locales y usar NVENC de
 NVIDIA automaticamente cuando el runtime local lo expone.
+
+Incluye configuracion para carpetas de trabajo, musica de fondo, avatar opcional,
+posicion/tamano del avatar, volumen de musica, nichos, capitulos y proveedores
+de voz como Microsoft Edge o servicios pagos configurables.
 
 ## Requisitos
 
@@ -19,7 +23,17 @@ python3 local_video_renderer.py init-config --path configs/example_100_videos.js
 
 La configuracion generada usa un `job_template` con `count: 100`. Puedes cambiar
 titulos, subtitulos, colores, duracion, resolucion, `source` de video/imagen,
-`audio` y nombre de salida.
+`voice_audio`, musica, avatar, nicho, capitulo y nombre de salida.
+
+## Carpetas de ejemplo
+
+La plantilla incluye estas carpetas:
+
+- `ejemplos/entrada`: videos, imagenes o recursos de entrada.
+- `ejemplos/videos_finalizados`: salida final de videos generados.
+- `ejemplos/musica_fondo`: musica para elegir o usar con `music: "auto"`.
+- `ejemplos/avatares`: imagenes o videos de avatar para `avatar: "auto"`.
+- `assets/moithano_icon.svg`: icono inicial del programa; puedes reemplazarlo.
 
 ## Renderizar localmente
 
@@ -62,6 +76,23 @@ La validacion revisa que no haya IDs duplicados, nombres de salida repetidos,
 assets inexistentes, dimensiones incompatibles con H.264 y encoders locales no
 disponibles.
 
+## Avatar, voz y musica
+
+En cada trabajo o en `defaults` puedes usar:
+
+- `presentation_mode`: `voice_only` para solo narracion o `avatar` para mostrar avatar.
+- `avatar`: ruta, nombre dentro de `folders.avatar_dir`, o `auto`.
+- `avatar_position`: `bottom_center`, `bottom_right`, `bottom_left`, `top_right`, `top_left`.
+- `avatar_size_percent`: tamano del avatar respecto al ancho del video, de `5` a `100`.
+- `music`: ruta, nombre dentro de `folders.music_dir`, o `auto`.
+- `music_volume`: volumen de la musica de fondo de `1` a `200`.
+- `voice_provider`: `microsoft_edge`, `levelup_paid`, `elevenlabs` u otro proveedor externo.
+- `voice_name`: nombre de voz a usar por tu generador de audios.
+
+El renderizador mezcla musica y voz cuando ambos archivos existen. Los campos de
+Sora 2 y proveedores pagos quedan en la configuracion para integrarlos con tus
+generadores, mientras FFmpeg ensambla el video final localmente.
+
 ## Formato de configuracion
 
 ```json
@@ -73,7 +104,13 @@ disponibles.
     "duration": 8,
     "background": "#101827",
     "font_color": "white",
-    "subtitle_color": "#dbeafe"
+    "subtitle_color": "#dbeafe",
+    "presentation_mode": "avatar",
+    "avatar": "auto",
+    "avatar_position": "bottom_right",
+    "avatar_size_percent": 28,
+    "music": "auto",
+    "music_volume": 35
   },
   "count": 100,
   "job_template": {

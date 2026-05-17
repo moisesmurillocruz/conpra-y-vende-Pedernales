@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from local_video_renderer import determine_workers, load_plan, render_job, validate_jobs
+from local_video_renderer import determine_workers, load_plan, render_job, resolve_output_dir, validate_jobs
 
 
 class LocalVideoRendererTests(unittest.TestCase):
@@ -99,6 +99,19 @@ class LocalVideoRendererTests(unittest.TestCase):
         self.assertEqual(0, result.return_code)
         self.assertEqual([], result.command)
         self.assertEqual(len(b"already rendered"), result.size_bytes)
+
+    def test_resolve_output_dir_uses_configured_final_folder(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            temp_path = Path(temp_root)
+            config_path = temp_path / "videos.json"
+            config_path.write_text(
+                json.dumps({"folders": {"final_dir": "videos_finalizados"}, "jobs": [{"title": "One"}]}),
+                encoding="utf-8",
+            )
+
+            output_dir = resolve_output_dir(config_path, None)
+
+        self.assertEqual("videos_finalizados", output_dir.name)
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for render integration test")
     def test_render_job_creates_local_mp4_with_expected_resolution(self):
@@ -232,6 +245,138 @@ class LocalVideoRendererTests(unittest.TestCase):
             self.assertIn("[skip] (1/1) cli", second.stdout)
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(1, manifest["totals"]["skipped"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for avatar/music integration test")
+    def test_cli_render_uses_configured_folders_avatar_and_music(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            temp_path = Path(temp_root)
+            avatar_dir = temp_path / "avatares"
+            music_dir = temp_path / "musica"
+            final_dir = temp_path / "final"
+            avatar_dir.mkdir()
+            music_dir.mkdir()
+            avatar_path = avatar_dir / "avatar.png"
+            music_path = music_dir / "music.wav"
+
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=c=green:s=48x48:d=0.1",
+                    "-frames:v",
+                    "1",
+                    str(avatar_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:duration=0.6",
+                    "-ac",
+                    "1",
+                    str(music_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            config_path = temp_path / "videos.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "folders": {
+                            "final_dir": str(final_dir),
+                            "music_dir": str(music_dir),
+                            "avatar_dir": str(avatar_dir),
+                        },
+                        "defaults": {
+                            "duration": 0.6,
+                            "width": 160,
+                            "height": 90,
+                            "fps": 10,
+                            "font_size": 16,
+                            "subtitle_size": 10,
+                            "presentation_mode": "avatar",
+                            "avatar": "auto",
+                            "avatar_position": "bottom_left",
+                            "avatar_size_percent": 25,
+                            "music": "auto",
+                            "music_volume": 80,
+                        },
+                        "jobs": [{"id": "avatar-music", "title": "Avatar y musica"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            validate = subprocess.run(
+                [
+                    sys.executable,
+                    "local_video_renderer.py",
+                    "validate",
+                    "--config",
+                    str(config_path),
+                    "--encoder",
+                    "cpu",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn("Validation OK: 1 job(s)", validate.stdout)
+
+            render = subprocess.run(
+                [
+                    sys.executable,
+                    "local_video_renderer.py",
+                    "render",
+                    "--config",
+                    str(config_path),
+                    "--workers",
+                    "1",
+                    "--encoder",
+                    "cpu",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn("[ok] (1/1) avatar-music", render.stdout)
+
+            output_path = final_dir / "avatar-music.mp4"
+            self.assertTrue(output_path.exists())
+            probe = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "stream=codec_type",
+                    "-of",
+                    "csv=p=0",
+                    str(output_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn("video", probe.stdout)
+            self.assertIn("audio", probe.stdout)
+
+            manifest = json.loads((final_dir / "render_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual("avatar", manifest["results"][0]["presentation_mode"])
+            self.assertEqual(1, manifest["totals"]["ok"])
 
 
 if __name__ == "__main__":
