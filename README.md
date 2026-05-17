@@ -14,7 +14,22 @@ servicios pagos configurables.
 
 - Python 3.10+
 - FFmpeg instalado localmente y disponible como `ffmpeg`
+- Windows 64-bit recomendado para aprovechar RAM, CPU, disco local y GPU.
 - Opcional: GPU NVIDIA con `h264_nvenc` para aceleracion por hardware
+
+## Revisar tu PC antes de renderizar
+
+```bash
+python3 local_video_renderer.py system-info \
+  --config configs/example_100_videos.json \
+  --performance-profile max \
+  --encoder auto
+```
+
+El preflight muestra sistema operativo, si Python es 64-bit, nucleos de CPU,
+RAM, espacio libre en salida/cache, FFmpeg, encoder y workers. En Windows usa
+`--temp-dir D:\MOITHANO_CACHE` o configura `folders.temp_dir` para usar un SSD o
+NVMe con espacio suficiente.
 
 ## Crear una configuracion de 100 videos
 
@@ -35,6 +50,7 @@ La plantilla incluye estas carpetas:
 - `ejemplos/videos_finalizados`: videos largos ya unidos y listos para publicar.
 - `ejemplos/musica_fondo`: musica para elegir o usar con `music: "auto"`.
 - `ejemplos/avatares`: imagenes o videos de avatar para `avatar: "auto"`.
+- `ejemplos/cache_temporal`: archivos temporales de render en disco local rapido.
 - `ejemplos/hashes_procesados.json`: registro de preguntas/contenidos ya usados.
 - `assets/moithano_icon.svg`: icono inicial del programa; puedes reemplazarlo.
 
@@ -44,16 +60,20 @@ La plantilla incluye estas carpetas:
 python3 local_video_renderer.py render \
   --config configs/example_100_videos.json \
   --workers auto \
+  --performance-profile max \
   --encoder auto \
+  --temp-dir ejemplos/cache_temporal \
   --skip-existing
 ```
 
 Opciones utiles:
 
 - `--workers auto`: usa CPU y RAM locales para elegir una concurrencia segura.
+- `--performance-profile balanced|fast|max`: controla cuanta CPU/RAM local usar.
 - `--encoder auto`: usa `h264_nvenc` si hay runtime NVIDIA; si no, usa `libx264`.
 - `--encoder cpu`: fuerza render por CPU con `libx264`.
 - `--encoder nvidia`: fuerza `h264_nvenc`.
+- `--temp-dir ruta`: usa una carpeta temporal local rapida para FFmpeg.
 - `--limit N`: renderiza solo los primeros `N` trabajos para pruebas.
 - `--dry-run`: imprime los comandos FFmpeg sin renderizar.
 - `--skip-existing`: permite reanudar lotes grandes sin repetir MP4 ya creados.

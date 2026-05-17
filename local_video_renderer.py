@@ -8,6 +8,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -25,6 +26,7 @@ VIDEO_SUFFIXES = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 AUDIO_SUFFIXES = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 GREEN = "\033[92m"
 RESET = "\033[0m"
+MIN_FREE_DISK_GIB = 1.0
 AVATAR_POSITIONS = {
     "bottom_center": ("(main_w-overlay_w)/2", "main_h-overlay_h-40"),
     "bottom_right": ("main_w-overlay_w-40", "main_h-overlay_h-40"),
@@ -162,6 +164,21 @@ class InputLayout:
     voice_index: int | None = None
     music_index: int | None = None
     avatar_index: int | None = None
+
+
+@dataclass(frozen=True)
+class SystemProfile:
+    os_name: str
+    machine: str
+    is_64bit: bool
+    cpu_count: int
+    total_memory_gib: float
+    free_output_gib: float
+    free_temp_gib: float
+    ffmpeg_path: str
+    selected_encoder: str
+    worker_count: int
+    performance_profile: str
 
 
 def load_plan(config_path: Path) -> list[RenderJob]:
@@ -335,6 +352,69 @@ def write_hash_registry(path: Path, hashes: set[str]) -> None:
     path.write_text(json.dumps(sorted(hashes), indent=2) + "\n", encoding="utf-8")
 
 
+def inspect_system(
+    output_dir: Path,
+    temp_dir: Path | None,
+    encoder: str,
+    workers: int | str,
+    job_count: int,
+    performance_profile: str,
+) -> SystemProfile:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checked_temp_dir = temp_dir or Path(tempfile.gettempdir())
+    checked_temp_dir.mkdir(parents=True, exist_ok=True)
+    selected_encoder = choose_encoder(encoder)
+    return SystemProfile(
+        os_name=f"{platform.system()} {platform.release()}",
+        machine=platform.machine(),
+        is_64bit=sys.maxsize > 2**32,
+        cpu_count=os.cpu_count() or 1,
+        total_memory_gib=float(_total_memory_gib()),
+        free_output_gib=_free_disk_gib(output_dir),
+        free_temp_gib=_free_disk_gib(checked_temp_dir),
+        ffmpeg_path=shutil.which("ffmpeg") or "",
+        selected_encoder=selected_encoder,
+        worker_count=determine_workers(workers, job_count, performance_profile),
+        performance_profile=normalize_performance_profile(performance_profile),
+    )
+
+
+def preflight_environment(
+    jobs: list[RenderJob],
+    output_dir: Path,
+    temp_dir: Path | None,
+    encoder: str,
+    workers: int | str,
+    performance_profile: str,
+) -> tuple[SystemProfile, list[str]]:
+    profile = inspect_system(output_dir, temp_dir, encoder, workers, len(jobs), performance_profile)
+    errors: list[str] = []
+    if not profile.ffmpeg_path:
+        errors.append("ffmpeg is required and was not found in PATH")
+    if not profile.is_64bit:
+        errors.append("64-bit Python/Windows is required for large local renders")
+    if profile.free_output_gib < MIN_FREE_DISK_GIB:
+        errors.append(f"output drive has only {profile.free_output_gib:.2f} GiB free")
+    if profile.free_temp_gib < MIN_FREE_DISK_GIB:
+        errors.append(f"temporary drive has only {profile.free_temp_gib:.2f} GiB free")
+    if profile.worker_count < 1:
+        errors.append("worker count must be at least 1")
+    return profile, errors
+
+
+def print_system_profile(profile: SystemProfile) -> None:
+    print_stage_header("PC LOCAL 64-BIT")
+    print(f"OS: {profile.os_name} ({profile.machine})")
+    print(f"64-bit: {'yes' if profile.is_64bit else 'no'}")
+    print(f"CPU threads: {profile.cpu_count}")
+    print(f"RAM total: {profile.total_memory_gib:.2f} GiB")
+    print(f"Output free: {profile.free_output_gib:.2f} GiB")
+    print(f"Temp free: {profile.free_temp_gib:.2f} GiB")
+    print(f"FFmpeg: {profile.ffmpeg_path}")
+    print(f"Encoder: {profile.selected_encoder}")
+    print(f"Workers: {profile.worker_count} ({profile.performance_profile})")
+
+
 def build_ffmpeg_command(
     job: RenderJob,
     output_dir: Path,
@@ -376,13 +456,16 @@ def render_job(
     encoder: str,
     overwrite: bool = True,
     skip_existing: bool = False,
+    temp_dir: Path | None = None,
 ) -> RenderResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_path_for_job(job, output_dir)
     if skip_existing and output_path.exists() and output_path.stat().st_size > 0:
         return RenderResult(job.job_id, str(output_path), [], 0, "", output_path.stat().st_size, 0.0, True)
 
-    with tempfile.TemporaryDirectory(prefix="local-video-renderer-") as temp_root:
+    if temp_dir:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="local-video-renderer-", dir=str(temp_dir) if temp_dir else None) as temp_root:
         command, output_path = build_ffmpeg_command(job, output_dir, encoder, Path(temp_root), overwrite)
         started_at = time.perf_counter()
         completed = subprocess.run(command, text=True, capture_output=True, check=False)
@@ -404,14 +487,16 @@ def render_all(
     output_dir: Path,
     encoder: str,
     workers: int | str,
+    performance_profile: str,
     dry_run: bool,
     overwrite: bool,
     skip_existing: bool,
     manifest_path: Path | None,
     hash_registry_path: Path | None = None,
     processed_hashes: set[str] | None = None,
+    temp_dir: Path | None = None,
 ) -> int:
-    worker_count = determine_workers(workers, len(jobs))
+    worker_count = determine_workers(workers, len(jobs), performance_profile)
     selected_encoder = choose_encoder(encoder)
     processed_hashes = processed_hashes or set()
     print_stage_header("RENDERIZADO")
@@ -432,7 +517,7 @@ def render_all(
     generated_seconds = 0.0
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_to_job = {
-            executor.submit(render_job, job, output_dir, selected_encoder, overwrite, skip_existing): job
+            executor.submit(render_job, job, output_dir, selected_encoder, overwrite, skip_existing, temp_dir): job
             for job in jobs
         }
         completed_count = 0
@@ -682,18 +767,31 @@ def choose_encoder(requested: str) -> str:
 
     if _has_nvidia_runtime() and _ffmpeg_encoder_exists("h264_nvenc"):
         return "h264_nvenc"
+    if platform.system().lower() == "windows":
+        for candidate in ("h264_qsv", "h264_amf"):
+            if _ffmpeg_encoder_exists(candidate):
+                return candidate
     return "libx264"
 
 
-def determine_workers(requested: int | str, job_count: int) -> int:
+def determine_workers(requested: int | str, job_count: int, performance_profile: str = "balanced") -> int:
     if job_count < 1:
         return 1
     if isinstance(requested, int) or str(requested).isdigit():
         return max(1, min(int(requested), job_count))
 
     cpu_count = os.cpu_count() or 1
-    cpu_target = max(1, cpu_count - 1)
-    ram_target = max(1, _total_memory_gib() // 1)
+    profile = normalize_performance_profile(performance_profile)
+    if profile == "max":
+        cpu_target = cpu_count
+        ram_per_worker_gib = 1
+    elif profile == "fast":
+        cpu_target = max(1, cpu_count - 1)
+        ram_per_worker_gib = 1
+    else:
+        cpu_target = max(1, int(cpu_count * 0.75))
+        ram_per_worker_gib = 2
+    ram_target = max(1, int(_total_memory_gib() // ram_per_worker_gib))
     return max(1, min(job_count, cpu_target, ram_target))
 
 
@@ -702,6 +800,23 @@ def normalize_color(value: str) -> str:
     if re.fullmatch(r"#[0-9a-fA-F]{6}", value):
         return f"0x{value[1:]}"
     return value
+
+
+def normalize_performance_profile(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "rapido": "fast",
+        "rápido": "fast",
+        "veloz": "fast",
+        "maximo": "max",
+        "máximo": "max",
+        "full": "max",
+        "balanceado": "balanced",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"balanced", "fast", "max"}:
+        raise ValueError("performance profile must be balanced, fast, or max")
+    return normalized
 
 
 def _normalize_hash_text(value: str) -> str:
@@ -788,6 +903,7 @@ def write_example_config(path: Path, count: int) -> None:
             "music_dir": "ejemplos/musica_fondo",
             "avatar_dir": "ejemplos/avatares",
             "hash_registry": "ejemplos/hashes_procesados.json",
+            "temp_dir": "ejemplos/cache_temporal",
         },
         "niches": MOITHANO_NICHES,
         "defaults": {
@@ -847,7 +963,9 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--config", type=Path, required=True)
     render_parser.add_argument("--output-dir", type=Path, help="overrides folders.final_dir from config")
     render_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
+    render_parser.add_argument("--performance-profile", default="balanced", help="balanced, fast, or max")
     render_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
+    render_parser.add_argument("--temp-dir", type=Path, help="fast local temporary folder, ideally SSD/NVMe")
     render_parser.add_argument("--limit", type=int, help="render only the first N jobs")
     render_parser.add_argument("--dry-run", action="store_true")
     render_parser.add_argument("--no-overwrite", action="store_true")
@@ -861,9 +979,19 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument("--config", type=Path, required=True)
     validate_parser.add_argument("--output-dir", type=Path, help="overrides folders.final_dir from config")
     validate_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
+    validate_parser.add_argument("--performance-profile", default="balanced", help="balanced, fast, or max")
     validate_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
+    validate_parser.add_argument("--temp-dir", type=Path, help="fast local temporary folder, ideally SSD/NVMe")
     validate_parser.add_argument("--limit", type=int, help="validate only the first N jobs")
     validate_parser.add_argument("--hash-registry", type=Path, help="JSON list of already processed content hashes")
+
+    system_parser = subparsers.add_parser("system-info", help="show local PC resources and render profile")
+    system_parser.add_argument("--config", type=Path, default=Path("configs/example_100_videos.json"))
+    system_parser.add_argument("--output-dir", type=Path, help="folder to check for free space")
+    system_parser.add_argument("--temp-dir", type=Path, help="temporary folder to check for free space")
+    system_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
+    system_parser.add_argument("--performance-profile", default="balanced", help="balanced, fast, or max")
+    system_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
 
     compile_parser = subparsers.add_parser("compile", help="join short clips into ordered final videos")
     compile_parser.add_argument("--config", type=Path, required=True)
@@ -883,13 +1011,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote {args.path} with {args.count} local render jobs.")
         return 0
 
-    _ensure_ffmpeg()
-
     if args.command == "list-encoders":
+        _ensure_ffmpeg()
         print(_ffmpeg_h264_encoders())
         return 0
 
     if args.command == "compile":
+        _ensure_ffmpeg()
         jobs = load_plan(args.config)
         clips_dir = resolve_output_dir(args.config, args.clips_dir, "clips")
         final_dir = resolve_output_dir(args.config, args.final_dir, "final")
@@ -898,25 +1026,46 @@ def main(argv: list[str] | None = None) -> int:
 
     output_dir = resolve_output_dir(args.config, args.output_dir, "clips")
     jobs = load_plan(args.config)
-    if args.limit is not None:
-        jobs = jobs[: max(0, args.limit)]
+    limit = getattr(args, "limit", None)
+    if limit is not None:
+        jobs = jobs[: max(0, limit)]
     if not jobs:
         raise SystemExit("No jobs selected.")
+
+    temp_dir = args.temp_dir or resolve_configured_path(args.config, ("temp_dir", "cache_dir", "scratch_dir"))
+
+    if args.command == "system-info":
+        profile, preflight_errors = preflight_environment(
+            jobs, output_dir, temp_dir, args.encoder, args.workers, args.performance_profile
+        )
+        print_system_profile(profile)
+        if preflight_errors:
+            print("Preflight warnings/errors:", file=sys.stderr)
+            for error in preflight_errors:
+                print(f"- {error}", file=sys.stderr)
+            return 2
+        return 0
+
+    _ensure_ffmpeg()
 
     hash_registry_path = args.hash_registry or resolve_configured_path(
         args.config, ("hash_registry", "processed_hashes", "hashes_procesados")
     )
     processed_hashes = load_hash_registry(hash_registry_path)
 
-    errors = validate_jobs(jobs, output_dir, processed_hashes) + validate_encoder(args.encoder)
+    profile, preflight_errors = preflight_environment(
+        jobs, output_dir, temp_dir, args.encoder, args.workers, args.performance_profile
+    )
+    errors = validate_jobs(jobs, output_dir, processed_hashes) + validate_encoder(args.encoder) + preflight_errors
     if errors:
         print("Validation failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 2
 
-    worker_count = determine_workers(args.workers, len(jobs))
+    worker_count = determine_workers(args.workers, len(jobs), args.performance_profile)
     if args.command == "validate":
+        print_system_profile(profile)
         print(f"Validation OK: {len(jobs)} job(s), {worker_count} worker(s), encoder {choose_encoder(args.encoder)}.")
         return 0
 
@@ -926,12 +1075,14 @@ def main(argv: list[str] | None = None) -> int:
         output_dir,
         args.encoder,
         args.workers,
+        args.performance_profile,
         args.dry_run,
         not args.no_overwrite,
         args.skip_existing,
         manifest_path,
         None if args.no_update_hash_registry else hash_registry_path,
         processed_hashes,
+        temp_dir,
     )
 
 
@@ -943,6 +1094,10 @@ def _encoder_args(encoder: str, job: RenderJob) -> list[str]:
         args.extend(["-preset", job.preset, "-crf", str(job.crf)])
     elif encoder == "h264_nvenc":
         args.extend(["-preset", "p4", "-cq", str(job.crf), "-b:v", "0"])
+    elif encoder == "h264_qsv":
+        args.extend(["-global_quality", str(job.crf)])
+    elif encoder == "h264_amf":
+        args.extend(["-quality", "quality", "-rc", "cqp", "-qp_i", str(job.crf), "-qp_p", str(job.crf)])
     return args
 
 
@@ -1195,6 +1350,8 @@ def _ffmpeg_encoder_exists(name: str) -> bool:
 
 
 def _ffmpeg_h264_encoders() -> str:
+    if not shutil.which("ffmpeg"):
+        return ""
     completed = subprocess.run(
         ["ffmpeg", "-hide_banner", "-encoders"],
         text=True,
@@ -1205,6 +1362,8 @@ def _ffmpeg_h264_encoders() -> str:
 
 
 def _ffmpeg_encoder_names() -> set[str]:
+    if not shutil.which("ffmpeg"):
+        return set()
     completed = subprocess.run(
         ["ffmpeg", "-hide_banner", "-encoders"],
         text=True,
@@ -1230,6 +1389,11 @@ def _total_memory_gib() -> int:
     except (AttributeError, ValueError, OSError):
         return 1
     return max(1, int(page_size * page_count / (1024**3)))
+
+
+def _free_disk_gib(path: Path) -> float:
+    usage = shutil.disk_usage(path)
+    return usage.free / (1024**3)
 
 
 if __name__ == "__main__":

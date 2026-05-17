@@ -7,3 +7,5 @@ ejemplos/videos_cortitos/*
 !ejemplos/videos_cortitos/.gitkeep
 ejemplos/videos_finalizados/*
 !ejemplos/videos_finalizados/.gitkeep
+ejemplos/cache_temporal/*
+!ejemplos/cache_temporal/.gitkeep

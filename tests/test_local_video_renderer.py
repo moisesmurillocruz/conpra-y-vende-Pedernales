@@ -9,7 +9,9 @@ from pathlib import Path
 from local_video_renderer import (
     content_hash,
     determine_workers,
+    inspect_system,
     load_plan,
+    normalize_performance_profile,
     render_job,
     resolve_output_dir,
     validate_jobs,
@@ -53,6 +55,50 @@ class LocalVideoRendererTests(unittest.TestCase):
     def test_determine_workers_caps_to_job_count(self):
         self.assertEqual(3, determine_workers(8, 3))
         self.assertGreaterEqual(determine_workers("auto", 3), 1)
+        self.assertGreaterEqual(determine_workers("auto", 3, "max"), determine_workers("auto", 3, "balanced"))
+        self.assertEqual("max", normalize_performance_profile("maximo"))
+
+    def test_inspect_system_reports_local_resources(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            profile = inspect_system(Path(temp_root) / "out", Path(temp_root) / "tmp", "cpu", "auto", 2, "fast")
+
+        self.assertTrue(profile.is_64bit)
+        self.assertGreaterEqual(profile.cpu_count, 1)
+        self.assertEqual("libx264", profile.selected_encoder)
+        self.assertGreaterEqual(profile.worker_count, 1)
+
+    def test_cli_system_info_reports_64_bit_profile(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            temp_path = Path(temp_root)
+            config_path = temp_path / "videos.json"
+            config_path.write_text(
+                json.dumps({"jobs": [{"id": "profile", "title": "Profile"}]}),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "local_video_renderer.py",
+                    "system-info",
+                    "--config",
+                    str(config_path),
+                    "--output-dir",
+                    str(temp_path / "out"),
+                    "--temp-dir",
+                    str(temp_path / "tmp"),
+                    "--encoder",
+                    "cpu",
+                    "--performance-profile",
+                    "max",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        self.assertIn("64-bit: yes", result.stdout)
+        self.assertIn("Encoder: libx264", result.stdout)
 
     def test_validate_jobs_reports_missing_assets_and_output_collisions(self):
         with tempfile.TemporaryDirectory() as temp_root:
@@ -386,6 +432,8 @@ class LocalVideoRendererTests(unittest.TestCase):
                     str(config_path),
                     "--workers",
                     "1",
+                    "--temp-dir",
+                    str(temp_path / "tmp"),
                     "--encoder",
                     "cpu",
                 ],
@@ -394,6 +442,7 @@ class LocalVideoRendererTests(unittest.TestCase):
                 check=True,
             )
             self.assertIn("[ok] (1/1) avatar-music", render.stdout)
+            self.assertTrue((temp_path / "tmp").exists())
 
             output_path = final_dir / "avatar-music.mp4"
             self.assertTrue(output_path.exists())

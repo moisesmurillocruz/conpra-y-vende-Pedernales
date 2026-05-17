@@ -17,7 +17,8 @@
     "final_dir": "ejemplos/videos_finalizados",
     "music_dir": "ejemplos/musica_fondo",
     "avatar_dir": "ejemplos/avatares",
-    "hash_registry": "ejemplos/hashes_procesados.json"
+    "hash_registry": "ejemplos/hashes_procesados.json",
+    "temp_dir": "ejemplos/cache_temporal"
   },
   "niches": [
     "casos de la vida real",
