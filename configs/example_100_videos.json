@@ -13,9 +13,11 @@
   },
   "folders": {
     "input_dir": "ejemplos/entrada",
+    "clips_dir": "ejemplos/videos_cortitos",
     "final_dir": "ejemplos/videos_finalizados",
     "music_dir": "ejemplos/musica_fondo",
-    "avatar_dir": "ejemplos/avatares"
+    "avatar_dir": "ejemplos/avatares",
+    "hash_registry": "ejemplos/hashes_procesados.json"
   },
   "niches": [
     "casos de la vida real",
@@ -88,15 +90,26 @@
     "music": "",
     "music_volume": 35,
     "voice_provider": "microsoft_edge",
-    "voice_name": "auto"
+    "voice_name": "auto",
+    "military_border": true
   },
   "count": 100,
   "job_template": {
     "id": "video-{index:03d}",
+    "story_id": "historia-moithano-001",
+    "sequence": "{index}",
     "title": "Video local {index:03d}",
     "subtitle": "Renderizado sin servidores externos usando FFmpeg local",
     "output_name": "video-{index:03d}.mp4",
     "niche": "historias por capitulos",
-    "chapter": "{index}"
+    "chapter": "{index}",
+    "question": "Pregunta original del capitulo {index}",
+    "options": [
+      "A. Opcion unica {index}",
+      "B. Opcion alternativa {index}",
+      "C. Opcion descartada {index}",
+      "D. Opcion sorpresa {index}"
+    ],
+    "correct_answer": "A"
   }
 }

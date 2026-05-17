@@ -6,7 +6,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from local_video_renderer import determine_workers, load_plan, render_job, resolve_output_dir, validate_jobs
+from local_video_renderer import (
+    content_hash,
+    determine_workers,
+    load_plan,
+    render_job,
+    resolve_output_dir,
+    validate_jobs,
+)
 
 
 class LocalVideoRendererTests(unittest.TestCase):
@@ -109,9 +116,43 @@ class LocalVideoRendererTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            output_dir = resolve_output_dir(config_path, None)
+            output_dir = resolve_output_dir(config_path, None, "final")
 
         self.assertEqual("videos_finalizados", output_dir.name)
+
+    def test_validate_jobs_blocks_repeated_questions_and_processed_hashes(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            config_path = Path(temp_root) / "videos.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "jobs": [
+                            {
+                                "id": "q1",
+                                "title": "Pregunta 1",
+                                "question": "Quien construyo el arca?",
+                                "options": ["Moises", "Noe", "David", "Pablo"],
+                                "correct_answer": "Noe",
+                            },
+                            {
+                                "id": "q2",
+                                "title": "Pregunta 2",
+                                "question": "Quien construyo el arca?",
+                                "options": ["Moises", "Noe", "David", "Pablo"],
+                                "correct_answer": "Noe",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            jobs = load_plan(config_path)
+
+            duplicate_errors = validate_jobs(jobs, Path(temp_root) / "clips")
+            processed_errors = validate_jobs([jobs[0]], Path(temp_root) / "clips", {content_hash(jobs[0])})
+
+        self.assertTrue(any("repeated content/questions" in error for error in duplicate_errors))
+        self.assertTrue(any("already processed" in error for error in processed_errors))
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for render integration test")
     def test_render_job_creates_local_mp4_with_expected_resolution(self):
@@ -377,6 +418,91 @@ class LocalVideoRendererTests(unittest.TestCase):
             manifest = json.loads((final_dir / "render_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual("avatar", manifest["results"][0]["presentation_mode"])
             self.assertEqual(1, manifest["totals"]["ok"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for compile integration test")
+    def test_cli_compile_orders_short_clips_into_final_video(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            temp_path = Path(temp_root)
+            clips_dir = temp_path / "clips"
+            final_dir = temp_path / "final"
+            config_path = temp_path / "videos.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "folders": {
+                            "clips_dir": str(clips_dir),
+                            "final_dir": str(final_dir),
+                        },
+                        "defaults": {
+                            "duration": 0.4,
+                            "width": 160,
+                            "height": 90,
+                            "fps": 10,
+                            "font_size": 16,
+                            "subtitle_size": 10,
+                            "story_id": "historia-ordenada",
+                        },
+                        "jobs": [
+                            {
+                                "id": "clip-02",
+                                "sequence": 2,
+                                "title": "Capitulo dos",
+                                "output_name": "clip-02.mp4",
+                            },
+                            {
+                                "id": "clip-01",
+                                "sequence": 1,
+                                "title": "Capitulo uno",
+                                "output_name": "clip-01.mp4",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            render = subprocess.run(
+                [
+                    sys.executable,
+                    "local_video_renderer.py",
+                    "render",
+                    "--config",
+                    str(config_path),
+                    "--workers",
+                    "1",
+                    "--encoder",
+                    "cpu",
+                    "--no-update-hash-registry",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn("videos 2/2", render.stdout)
+
+            compile_result = subprocess.run(
+                [
+                    sys.executable,
+                    "local_video_renderer.py",
+                    "compile",
+                    "--config",
+                    str(config_path),
+                    "--story-id",
+                    "historia-ordenada",
+                    "--output-name",
+                    "historia-final.mp4",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn("[ok] historia-ordenada", compile_result.stdout)
+
+            final_video = final_dir / "historia-final.mp4"
+            self.assertTrue(final_video.exists())
+            manifest = json.loads((final_dir / "compile_manifest.json").read_text(encoding="utf-8"))
+            ordered_ids = [item["job_id"] for item in manifest["compiled"][0]["ordered_jobs"]]
+            self.assertEqual(["clip-01", "clip-02"], ordered_ids)
 
 
 if __name__ == "__main__":

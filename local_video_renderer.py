@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,8 @@ from typing import Any, Iterable
 IMAGE_SUFFIXES = {".apng", ".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 VIDEO_SUFFIXES = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 AUDIO_SUFFIXES = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
+GREEN = "\033[92m"
+RESET = "\033[0m"
 AVATAR_POSITIONS = {
     "bottom_center": ("(main_w-overlay_w)/2", "main_h-overlay_h-40"),
     "bottom_right": ("main_w-overlay_w-40", "main_h-overlay_h-40"),
@@ -132,8 +135,14 @@ class RenderJob:
     avatar_size_percent: int
     niche: str
     chapter: int | None
+    story_id: str
+    sequence: int
+    question: str
+    options: list[str]
+    correct_answer: str
     voice_provider: str
     voice_name: str
+    military_border: bool
 
 
 @dataclass(frozen=True)
@@ -214,23 +223,51 @@ def load_plan(config_path: Path) -> list[RenderJob]:
                 ),
                 niche=str(merged.get("niche", "")),
                 chapter=_optional_int(merged.get("chapter")),
+                story_id=str(merged.get("story_id", "historia-principal")),
+                sequence=_positive_int(merged.get("sequence", merged.get("chapter", position)), "sequence"),
+                question=str(merged.get("question", "")),
+                options=[str(option) for option in merged.get("options", [])],
+                correct_answer=str(merged.get("correct_answer", "")),
                 voice_provider=str(merged.get("voice_provider", "microsoft_edge")),
                 voice_name=str(merged.get("voice_name", "auto")),
+                military_border=_bool_value(merged.get("military_border", True)),
             )
         )
 
     return jobs
 
 
-def validate_jobs(jobs: list[RenderJob], output_dir: Path) -> list[str]:
+def validate_jobs(
+    jobs: list[RenderJob],
+    output_dir: Path,
+    processed_hashes: set[str] | None = None,
+) -> list[str]:
     errors: list[str] = []
     seen_ids: set[str] = set()
     seen_outputs: dict[str, str] = {}
+    seen_content_hashes: dict[str, str] = {}
+    seen_story_sequences: dict[tuple[str, int], str] = {}
+    processed_hashes = processed_hashes or set()
 
     for job in jobs:
         if job.job_id in seen_ids:
             errors.append(f"duplicate job id: {job.job_id}")
         seen_ids.add(job.job_id)
+
+        story_key = (job.story_id, job.sequence)
+        if story_key in seen_story_sequences:
+            errors.append(
+                f"{job.job_id}: story sequence {job.sequence} collides with "
+                f"{seen_story_sequences[story_key]} in {job.story_id}"
+            )
+        seen_story_sequences[story_key] = job.job_id
+
+        digest = content_hash(job)
+        if digest in seen_content_hashes:
+            errors.append(f"{job.job_id}: repeated content/questions from {seen_content_hashes[digest]}")
+        seen_content_hashes[digest] = job.job_id
+        if digest in processed_hashes:
+            errors.append(f"{job.job_id}: content hash was already processed: {digest}")
 
         if Path(job.output_name).name != job.output_name:
             errors.append(f"{job.job_id}: output_name must be a file name, not a path")
@@ -260,6 +297,42 @@ def validate_jobs(jobs: list[RenderJob], output_dir: Path) -> list[str]:
             errors.append(f"{job.job_id}: presentation_mode avatar requires avatar")
 
     return errors
+
+
+def content_hash(job: RenderJob) -> str:
+    if job.question:
+        content = {
+            "kind": "question",
+            "question": _normalize_hash_text(job.question),
+            "options": [_normalize_hash_text(option) for option in job.options],
+            "correct_answer": _normalize_hash_text(job.correct_answer),
+        }
+    else:
+        content = {
+            "kind": "story",
+            "niche": _normalize_hash_text(job.niche),
+            "title": _normalize_hash_text(job.title),
+            "subtitle": _normalize_hash_text(job.subtitle),
+        }
+    payload = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def load_hash_registry(path: Path | None) -> set[str]:
+    if not path or not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return {str(item) for item in data}
+    if isinstance(data, dict):
+        hashes = data.get("hashes") or data.get("processed_hashes") or []
+        return {str(item) for item in hashes}
+    raise ValueError("hash registry must be a JSON list or object with hashes")
+
+
+def write_hash_registry(path: Path, hashes: set[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(hashes), indent=2) + "\n", encoding="utf-8")
 
 
 def build_ffmpeg_command(
@@ -335,9 +408,13 @@ def render_all(
     overwrite: bool,
     skip_existing: bool,
     manifest_path: Path | None,
+    hash_registry_path: Path | None = None,
+    processed_hashes: set[str] | None = None,
 ) -> int:
     worker_count = determine_workers(workers, len(jobs))
     selected_encoder = choose_encoder(encoder)
+    processed_hashes = processed_hashes or set()
+    print_stage_header("RENDERIZADO")
     print(f"Rendering {len(jobs)} video(s) locally with {worker_count} worker(s).")
     print(f"Encoder: {selected_encoder}")
 
@@ -351,6 +428,8 @@ def render_all(
 
     failures: list[RenderResult] = []
     results: list[RenderResult] = []
+    started_at = time.perf_counter()
+    generated_seconds = 0.0
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_to_job = {
             executor.submit(render_job, job, output_dir, selected_encoder, overwrite, skip_existing): job
@@ -358,13 +437,16 @@ def render_all(
         }
         completed_count = 0
         for future in concurrent.futures.as_completed(future_to_job):
+            job = future_to_job[future]
             result = future.result()
             completed_count += 1
             progress = f"({completed_count}/{len(jobs)})"
             results.append(result)
             if result.skipped:
+                generated_seconds += job.duration
                 print(f"[skip] {progress} {result.job_id} -> {result.output_path}")
             elif result.return_code == 0:
+                generated_seconds += job.duration
                 print(
                     f"[ok] {progress} {result.job_id} -> {result.output_path} "
                     f"({result.size_bytes} bytes, {result.elapsed_seconds:.2f}s)"
@@ -373,10 +455,20 @@ def render_all(
                 failures.append(result)
                 print(f"[failed] {progress} {result.job_id}", file=sys.stderr)
                 print(result.stderr.strip(), file=sys.stderr)
+            print_progress_line("RENDER", completed_count, len(jobs), started_at, generated_seconds)
 
     if manifest_path:
         write_manifest(manifest_path, jobs, results, output_dir, selected_encoder, worker_count)
         print(f"Wrote manifest: {manifest_path}")
+
+    if hash_registry_path and not failures:
+        updated_hashes = set(processed_hashes)
+        successful_ids = {result.job_id for result in results if result.return_code == 0}
+        for job in jobs:
+            if job.job_id in successful_ids:
+                updated_hashes.add(content_hash(job))
+        write_hash_registry(hash_registry_path, updated_hashes)
+        print(f"Wrote hash registry: {hash_registry_path}")
 
     if failures:
         print(f"{len(failures)} render job(s) failed.", file=sys.stderr)
@@ -409,8 +501,11 @@ def write_manifest(
         "results": [
             {
                 "job_id": result.job_id,
+                "content_hash": content_hash(jobs[order[result.job_id]]) if result.job_id in order else "",
                 "niche": jobs[order[result.job_id]].niche if result.job_id in order else "",
                 "chapter": jobs[order[result.job_id]].chapter if result.job_id in order else None,
+                "story_id": jobs[order[result.job_id]].story_id if result.job_id in order else "",
+                "sequence": jobs[order[result.job_id]].sequence if result.job_id in order else None,
                 "presentation_mode": jobs[order[result.job_id]].presentation_mode if result.job_id in order else "",
                 "voice_provider": jobs[order[result.job_id]].voice_provider if result.job_id in order else "",
                 "voice_name": jobs[order[result.job_id]].voice_name if result.job_id in order else "",
@@ -428,12 +523,148 @@ def write_manifest(
     manifest_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def compile_stories(
+    jobs: list[RenderJob],
+    clips_dir: Path,
+    final_dir: Path,
+    story_id: str | None,
+    output_name: str | None,
+    manifest_path: Path | None,
+) -> int:
+    selected_jobs = [job for job in jobs if story_id is None or job.story_id == story_id]
+    if not selected_jobs:
+        print("No clips selected for compilation.", file=sys.stderr)
+        return 2
+
+    grouped: dict[str, list[RenderJob]] = {}
+    for job in selected_jobs:
+        grouped.setdefault(job.story_id, []).append(job)
+
+    final_dir.mkdir(parents=True, exist_ok=True)
+    print_stage_header("COMPILADOR DE VIDEOS")
+    started_at = time.perf_counter()
+    compiled: list[dict[str, Any]] = []
+    failures = 0
+    total_groups = len(grouped)
+
+    with tempfile.TemporaryDirectory(prefix="moithano-compile-") as temp_root:
+        for index, (group_story_id, group_jobs) in enumerate(sorted(grouped.items()), start=1):
+            ordered_jobs = sorted(group_jobs, key=lambda job: (job.sequence, job.chapter or 0, job.job_id))
+            clip_paths = [output_path_for_job(job, clips_dir) for job in ordered_jobs]
+            missing = [str(path) for path in clip_paths if not path.exists()]
+            if missing:
+                failures += 1
+                print(f"[failed] {group_story_id}: missing clips: {', '.join(missing)}", file=sys.stderr)
+                continue
+
+            target_name = output_name if output_name and total_groups == 1 else f"{_slugify(group_story_id)}.mp4"
+            if not target_name.lower().endswith(".mp4"):
+                target_name = f"{target_name}.mp4"
+            output_path = final_dir / _safe_output_name(target_name)
+            list_path = Path(temp_root) / f"{_slugify(group_story_id)}.txt"
+            list_path.write_text(
+                "".join(f"file '{str(path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n" for path in clip_paths),
+                encoding="utf-8",
+            )
+
+            command = [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(list_path),
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+            completed = subprocess.run(command, text=True, capture_output=True, check=False)
+            generated_seconds = sum(job.duration for job in ordered_jobs)
+            if completed.returncode == 0:
+                print(f"[ok] {group_story_id} -> {output_path} ({len(ordered_jobs)} clips)")
+            else:
+                failures += 1
+                print(f"[failed] {group_story_id}", file=sys.stderr)
+                print(completed.stderr.strip(), file=sys.stderr)
+
+            compiled.append(
+                {
+                    "story_id": group_story_id,
+                    "status": "ok" if completed.returncode == 0 else "failed",
+                    "output_path": str(output_path),
+                    "clips": [str(path) for path in clip_paths],
+                    "clip_count": len(clip_paths),
+                    "generated_seconds": generated_seconds,
+                    "ordered_jobs": [
+                        {
+                            "job_id": job.job_id,
+                            "sequence": job.sequence,
+                            "chapter": job.chapter,
+                            "content_hash": content_hash(job),
+                        }
+                        for job in ordered_jobs
+                    ],
+                    "stderr": completed.stderr.strip(),
+                }
+            )
+            print_progress_line("COMPILAR", index, total_groups, started_at, generated_seconds)
+
+    if manifest_path:
+        payload = {
+            "renderer": "local_video_renderer",
+            "created_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "clips_dir": str(clips_dir),
+            "final_dir": str(final_dir),
+            "totals": {
+                "stories": total_groups,
+                "ok": sum(1 for item in compiled if item["status"] == "ok"),
+                "failed": sum(1 for item in compiled if item["status"] != "ok"),
+            },
+            "compiled": compiled,
+        }
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"Wrote compile manifest: {manifest_path}")
+
+    return 1 if failures else 0
+
+
 def validate_encoder(requested: str) -> list[str]:
     selected = choose_encoder(requested)
     if not _ffmpeg_encoder_exists(selected):
         available = ", ".join(sorted(_ffmpeg_encoder_names())) or "none"
         return [f"FFmpeg encoder is not available: {selected}. Available encoders include: {available}"]
     return []
+
+
+def print_stage_header(stage: str) -> None:
+    print(f"{GREEN}====[ MOITHANO {stage} ]===={RESET}")
+
+
+def print_progress_line(stage: str, completed: int, total: int, started_at: float, generated_seconds: float) -> None:
+    percent = 100.0 if total <= 0 else (completed / total) * 100
+    elapsed = time.perf_counter() - started_at
+    bar_width = 28
+    filled = bar_width if total <= 0 else int(bar_width * completed / total)
+    bar = "#" * filled + "-" * (bar_width - filled)
+    print(
+        f"{GREEN}[{stage}] [{bar}] {percent:6.2f}% | videos {completed}/{total} | "
+        f"generado {_format_seconds(generated_seconds)} | transcurrido {_format_seconds(elapsed)}{RESET}"
+    )
+
+
+def _format_seconds(seconds: float) -> str:
+    minutes, remainder = divmod(max(0.0, seconds), 60)
+    whole_seconds = int(remainder)
+    microseconds = int((remainder - whole_seconds) * 1_000_000)
+    return f"{int(minutes)}m {whole_seconds}s {microseconds:06d}us"
 
 
 def choose_encoder(requested: str) -> str:
@@ -473,6 +704,10 @@ def normalize_color(value: str) -> str:
     return value
 
 
+def _normalize_hash_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
 def normalize_presentation_mode(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
     aliases = {
@@ -499,18 +734,37 @@ def normalize_avatar_position(value: str) -> str:
     return normalized
 
 
-def resolve_output_dir(config_path: Path, requested_output_dir: Path | None) -> Path:
+def resolve_output_dir(config_path: Path, requested_output_dir: Path | None, purpose: str = "clips") -> Path:
     if requested_output_dir:
         return requested_output_dir
     data = json.loads(config_path.read_text(encoding="utf-8"))
     folders = data.get("folders", {})
-    configured = folders.get("final_dir") or folders.get("finished_dir") or folders.get("output_dir")
+    if purpose == "final":
+        configured = folders.get("final_dir") or folders.get("finished_dir")
+        fallback = Path("ejemplos/videos_finalizados")
+    else:
+        configured = folders.get("clips_dir") or folders.get("short_clips_dir") or folders.get("output_dir")
+        fallback = Path("renders")
+    configured = configured or folders.get("final_dir") or folders.get("finished_dir")
     if configured:
         path = Path(str(configured)).expanduser()
         if not path.is_absolute():
             path = (config_path.parent / path).resolve()
         return path
-    return Path("renders")
+    return fallback
+
+
+def resolve_configured_path(config_path: Path, keys: tuple[str, ...]) -> Path | None:
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    folders = data.get("folders", {})
+    for key in keys:
+        value = folders.get(key)
+        if value:
+            path = Path(str(value)).expanduser()
+            if not path.is_absolute():
+                path = (config_path.parent / path).resolve()
+            return path
+    return None
 
 
 def shlex_join(command: Iterable[str]) -> str:
@@ -529,9 +783,11 @@ def write_example_config(path: Path, count: int) -> None:
         },
         "folders": {
             "input_dir": "ejemplos/entrada",
+            "clips_dir": "ejemplos/videos_cortitos",
             "final_dir": "ejemplos/videos_finalizados",
             "music_dir": "ejemplos/musica_fondo",
             "avatar_dir": "ejemplos/avatares",
+            "hash_registry": "ejemplos/hashes_procesados.json",
         },
         "niches": MOITHANO_NICHES,
         "defaults": {
@@ -554,15 +810,26 @@ def write_example_config(path: Path, count: int) -> None:
             "music_volume": 35,
             "voice_provider": "microsoft_edge",
             "voice_name": "auto",
+            "military_border": True,
         },
         "count": count,
         "job_template": {
             "id": "video-{index:03d}",
+            "story_id": "historia-moithano-001",
+            "sequence": "{index}",
             "title": "Video local {index:03d}",
             "subtitle": "Renderizado sin servidores externos usando FFmpeg local",
             "output_name": "video-{index:03d}.mp4",
             "niche": "historias por capitulos",
             "chapter": "{index}",
+            "question": "Pregunta original del capitulo {index}",
+            "options": [
+                "A. Opcion unica {index}",
+                "B. Opcion alternativa {index}",
+                "C. Opcion descartada {index}",
+                "D. Opcion sorpresa {index}",
+            ],
+            "correct_answer": "A",
         },
     }
     path.write_text(json.dumps(example, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -587,6 +854,8 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--skip-existing", action="store_true", help="resume by skipping non-empty outputs")
     render_parser.add_argument("--manifest", type=Path, help="write render report JSON to this path")
     render_parser.add_argument("--no-manifest", action="store_true", help="disable the default render manifest")
+    render_parser.add_argument("--hash-registry", type=Path, help="JSON list of already processed content hashes")
+    render_parser.add_argument("--no-update-hash-registry", action="store_true", help="do not append successful hashes")
 
     validate_parser = subparsers.add_parser("validate", help="validate config, assets, and encoder")
     validate_parser.add_argument("--config", type=Path, required=True)
@@ -594,6 +863,15 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument("--workers", default="auto", help="'auto' or a positive integer")
     validate_parser.add_argument("--encoder", default="auto", help="auto, cpu, nvidia, intel, amd, or ffmpeg encoder")
     validate_parser.add_argument("--limit", type=int, help="validate only the first N jobs")
+    validate_parser.add_argument("--hash-registry", type=Path, help="JSON list of already processed content hashes")
+
+    compile_parser = subparsers.add_parser("compile", help="join short clips into ordered final videos")
+    compile_parser.add_argument("--config", type=Path, required=True)
+    compile_parser.add_argument("--clips-dir", type=Path, help="folder with short clips")
+    compile_parser.add_argument("--final-dir", type=Path, help="folder for long final videos")
+    compile_parser.add_argument("--story-id", help="compile only one story")
+    compile_parser.add_argument("--output-name", help="output file name when compiling one story")
+    compile_parser.add_argument("--manifest", type=Path, help="write compile report JSON to this path")
 
     encoder_parser = subparsers.add_parser("list-encoders", help="show local FFmpeg H.264 encoders")
     encoder_parser.set_defaults(list_encoders=True)
@@ -611,14 +889,26 @@ def main(argv: list[str] | None = None) -> int:
         print(_ffmpeg_h264_encoders())
         return 0
 
-    output_dir = resolve_output_dir(args.config, args.output_dir)
+    if args.command == "compile":
+        jobs = load_plan(args.config)
+        clips_dir = resolve_output_dir(args.config, args.clips_dir, "clips")
+        final_dir = resolve_output_dir(args.config, args.final_dir, "final")
+        manifest_path = args.manifest or final_dir / "compile_manifest.json"
+        return compile_stories(jobs, clips_dir, final_dir, args.story_id, args.output_name, manifest_path)
+
+    output_dir = resolve_output_dir(args.config, args.output_dir, "clips")
     jobs = load_plan(args.config)
     if args.limit is not None:
         jobs = jobs[: max(0, args.limit)]
     if not jobs:
         raise SystemExit("No jobs selected.")
 
-    errors = validate_jobs(jobs, output_dir) + validate_encoder(args.encoder)
+    hash_registry_path = args.hash_registry or resolve_configured_path(
+        args.config, ("hash_registry", "processed_hashes", "hashes_procesados")
+    )
+    processed_hashes = load_hash_registry(hash_registry_path)
+
+    errors = validate_jobs(jobs, output_dir, processed_hashes) + validate_encoder(args.encoder)
     if errors:
         print("Validation failed:", file=sys.stderr)
         for error in errors:
@@ -640,6 +930,8 @@ def main(argv: list[str] | None = None) -> int:
         not args.no_overwrite,
         args.skip_existing,
         manifest_path,
+        None if args.no_update_hash_registry else hash_registry_path,
+        processed_hashes,
     )
 
 
@@ -753,6 +1045,8 @@ def _video_filters(job: RenderJob, title_file: Path, subtitle_file: Path) -> lis
             f"y=({job.height}-text_h)/2+{max(18, job.font_size // 2)}:"
             "line_spacing=8"
         )
+    if job.military_border:
+        filters.append("drawbox=x=0:y=0:w=iw:h=ih:color=0x29ff7b@0.85:t=6")
     return filters
 
 
@@ -846,6 +1140,12 @@ def _optional_int(value: Any) -> int | None:
     if value in (None, ""):
         return None
     return int(value)
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "si", "sí", "on"}
 
 
 def _positive_float(value: Any, name: str) -> float:

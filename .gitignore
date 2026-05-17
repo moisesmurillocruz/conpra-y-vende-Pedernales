@@ -3,3 +3,7 @@ __pycache__/
 .pytest_cache/
 renders/
 artifact_review/
+ejemplos/videos_cortitos/*
+!ejemplos/videos_cortitos/.gitkeep
+ejemplos/videos_finalizados/*
+!ejemplos/videos_finalizados/.gitkeep

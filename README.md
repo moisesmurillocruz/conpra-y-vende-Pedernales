@@ -6,8 +6,9 @@ assets ni trabajos a servidores externos. El CLI puede generar una plantilla de
 NVIDIA automaticamente cuando el runtime local lo expone.
 
 Incluye configuracion para carpetas de trabajo, musica de fondo, avatar opcional,
-posicion/tamano del avatar, volumen de musica, nichos, capitulos y proveedores
-de voz como Microsoft Edge o servicios pagos configurables.
+posicion/tamano del avatar, volumen de musica, nichos, capitulos, hashes anti
+repeticion, compilacion ordenada y proveedores de voz como Microsoft Edge o
+servicios pagos configurables.
 
 ## Requisitos
 
@@ -30,9 +31,11 @@ titulos, subtitulos, colores, duracion, resolucion, `source` de video/imagen,
 La plantilla incluye estas carpetas:
 
 - `ejemplos/entrada`: videos, imagenes o recursos de entrada.
-- `ejemplos/videos_finalizados`: salida final de videos generados.
+- `ejemplos/videos_cortitos`: clips cortos generados por cada capitulo/parte.
+- `ejemplos/videos_finalizados`: videos largos ya unidos y listos para publicar.
 - `ejemplos/musica_fondo`: musica para elegir o usar con `music: "auto"`.
 - `ejemplos/avatares`: imagenes o videos de avatar para `avatar: "auto"`.
+- `ejemplos/hashes_procesados.json`: registro de preguntas/contenidos ya usados.
 - `assets/moithano_icon.svg`: icono inicial del programa; puedes reemplazarlo.
 
 ## Renderizar localmente
@@ -40,7 +43,6 @@ La plantilla incluye estas carpetas:
 ```bash
 python3 local_video_renderer.py render \
   --config configs/example_100_videos.json \
-  --output-dir renders \
   --workers auto \
   --encoder auto \
   --skip-existing
@@ -57,10 +59,25 @@ Opciones utiles:
 - `--skip-existing`: permite reanudar lotes grandes sin repetir MP4 ya creados.
 - `--manifest ruta.json`: guarda un reporte JSON con estado, tamanos, comandos y errores.
 - `--no-manifest`: desactiva el reporte JSON automatico `render_manifest.json`.
+- `--hash-registry ruta.json`: usa una lista JSON de hashes ya procesados.
+- `--no-update-hash-registry`: prueba sin guardar nuevos hashes.
 
-Cada render normal escribe por defecto `renders/render_manifest.json`. Ese archivo
-sirve para auditar los 100 resultados, detectar fallos y repetir solo lo que falte
-con `--skip-existing`.
+Cada render normal guarda clips en `folders.clips_dir`, escribe un manifiesto y
+actualiza el registro de hashes para evitar preguntas o contenidos repetidos.
+
+## Compilar clips cortos en video final
+
+```bash
+python3 local_video_renderer.py compile \
+  --config configs/example_100_videos.json \
+  --story-id historia-moithano-001 \
+  --output-name historia-final.mp4
+```
+
+El compilador ordena por `story_id`, `sequence` y `chapter`, toma los clips desde
+`ejemplos/videos_cortitos` y deja el video largo en `ejemplos/videos_finalizados`.
+Tambien escribe `compile_manifest.json` con el orden usado para que la historia
+no quede como una sopa de letras.
 
 ## Validar antes de renderizar
 
@@ -73,8 +90,16 @@ python3 local_video_renderer.py validate \
 ```
 
 La validacion revisa que no haya IDs duplicados, nombres de salida repetidos,
-assets inexistentes, dimensiones incompatibles con H.264 y encoders locales no
+secuencias repetidas por historia, preguntas/contenido ya usado, assets
+inexistentes, dimensiones incompatibles con H.264 y encoders locales no
 disponibles.
+
+## Progreso estilo militar
+
+Los pasos de renderizado y compilacion muestran barra verde, porcentaje, cantidad
+de videos, minutos, segundos y microsegundos generados/transcurridos. Ese formato
+esta pensado para futuras pantallas de descargas, renderizado, generador de voces
+y compilador de videos.
 
 ## Avatar, voz y musica
 
@@ -88,6 +113,7 @@ En cada trabajo o en `defaults` puedes usar:
 - `music_volume`: volumen de la musica de fondo de `1` a `200`.
 - `voice_provider`: `microsoft_edge`, `levelup_paid`, `elevenlabs` u otro proveedor externo.
 - `voice_name`: nombre de voz a usar por tu generador de audios.
+- `military_border`: `true` para borde verde estilo militar en el video.
 
 El renderizador mezcla musica y voz cuando ambos archivos existen. Los campos de
 Sora 2 y proveedores pagos quedan en la configuracion para integrarlos con tus
@@ -105,6 +131,8 @@ generadores, mientras FFmpeg ensambla el video final localmente.
     "background": "#101827",
     "font_color": "white",
     "subtitle_color": "#dbeafe",
+    "story_id": "historia-moithano-001",
+    "sequence": 1,
     "presentation_mode": "avatar",
     "avatar": "auto",
     "avatar_position": "bottom_right",
